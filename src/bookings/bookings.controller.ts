@@ -1,66 +1,120 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
   Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BookingsService } from './bookings.service';
-import { CreateBookingDto } from './dto/create-booking.dto';
-import { UpdateBookingDto } from './dto/update-booking.dto';
+import {
+  AvailabilityQuery,
+  CancelBookingDto,
+  CreateBookingDto,
+  ListBookingsQuery,
+  UpdateBookingDto,
+} from './dto/booking.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import {
+  PermissionsGuard,
+  StaffOnly,
+} from '../common/guards/permissions.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Role } from '../database/enums';
-
-interface AuthUser {
-  id: string;
-  role: Role;
-}
+import { StudioId } from '../common/decorators/studio.decorator';
+import type { User } from '../database/entities';
 
 @ApiTags('Bookings')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('bookings')
 export class BookingsController {
-  constructor(private bookingsService: BookingsService) {}
+  constructor(private readonly svc: BookingsService) {}
+
+  @Get('availability')
+  @ApiOperation({ summary: 'Busy times for a day (public, no client details)' })
+  availability(@StudioId() studioId: string, @Query() q: AvailabilityQuery) {
+    return this.svc.availability(studioId, q);
+  }
 
   @Post()
-  @ApiOperation({ summary: 'Create a booking' })
-  create(@CurrentUser() user: AuthUser, @Body() dto: CreateBookingDto) {
-    return this.bookingsService.create(user.id, dto, user.role);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Book a session (clients) or create one for a client (staff)',
+  })
+  create(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Body() dto: CreateBookingDto,
+  ) {
+    return this.svc.create(studioId, user, dto);
   }
 
   @Get()
-  @ApiOperation({
-    summary: 'List bookings (own for clients, all for staff/admin)',
-  })
-  findAll(@CurrentUser() user: AuthUser) {
-    return this.bookingsService.findAll(user.id, user.role);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Own bookings (clients) or all bookings (team)' })
+  list(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Query() q: ListBookingsQuery,
+  ) {
+    return this.svc.list(studioId, user, q);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a single booking' })
-  findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.bookingsService.findOne(id, user.id, user.role);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  findOne(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.findOne(studioId, id, user);
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Client cancels their own booking' })
+  cancel(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CancelBookingDto,
+  ) {
+    return this.svc.cancelOwn(studioId, id, user, dto.reason);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update booking status or reschedule' })
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @StaffOnly()
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reschedule, reassign or change status (team)' })
   update(
-    @Param('id') id: string,
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateBookingDto,
-    @CurrentUser() user: AuthUser,
   ) {
-    return this.bookingsService.update(id, dto, user.id, user.role);
+    return this.svc.update(studioId, id, user, dto);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a booking permanently' })
-  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.bookingsService.remove(id, user.id, user.role);
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @StaffOnly()
+  @ApiBearerAuth()
+  remove(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.remove(studioId, id, user);
   }
 }
