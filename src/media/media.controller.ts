@@ -23,6 +23,12 @@ const ALLOWED_MIME = [
 ];
 const MAX_SIZE     = 500 * 1024 * 1024; // 500 MB to accommodate raw assets
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
 @ApiTags('Media')
 @Controller('media')
 export class MediaController {
@@ -51,10 +57,10 @@ export class MediaController {
     if (file.mimetype.startsWith('video/')) type = 'video';
     if (file.mimetype.startsWith('audio/')) type = 'audio';
 
-    return { 
-      url, 
+    return {
+      url,
       type,
-      size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+      size: formatSize(file.size),
       name: file.originalname,
     };
   }
