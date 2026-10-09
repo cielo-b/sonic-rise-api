@@ -122,7 +122,7 @@ export class ReportsService {
     // Booked hours per room, clipped to the period, for sessions that happened or will.
     const roomHours = await q(
       `SELECT r.id, r.name,
-         COALESCE(SUM(EXTRACT(EPOCH FROM (LEAST(b."endsAt", $3) - GREATEST(b."startsAt", $2))) / 3600), 0) hours
+         COALESCE(SUM(CASE WHEN b.id IS NULL THEN 0 ELSE EXTRACT(EPOCH FROM (LEAST(b."endsAt", $3) - GREATEST(b."startsAt", $2))) / 3600 END), 0) hours
        FROM rooms r
        LEFT JOIN bookings b ON b."roomId" = r.id AND b."startsAt" < $3 AND b."endsAt" > $2
          AND b.status IN ('PENDING','CONFIRMED','COMPLETED')
@@ -151,13 +151,13 @@ export class ReportsService {
 
     const yearAgo = new Date(to.getTime() - 365 * 86_400_000);
     const monthly = await q(
-      `SELECT to_char(date_trunc('month', "paidAt" AT TIME ZONE $3), 'YYYY-MM') month, COALESCE(SUM(amount),0) revenue
+      `SELECT to_char(date_trunc('month', "paidAt" AT TIME ZONE $3), 'YYYY-MM') AS "month", COALESCE(SUM(amount),0) revenue
        FROM payments WHERE "studioId"=$1 AND status=$4 AND "paidAt" >= $2
        GROUP BY 1 ORDER BY 1`,
       [p.sid, yearAgo, studio.timezone, p.success],
     );
     const monthlyBookings = await q(
-      `SELECT to_char(date_trunc('month', "startsAt" AT TIME ZONE $3), 'YYYY-MM') month, COUNT(*) bookings
+      `SELECT to_char(date_trunc('month', "startsAt" AT TIME ZONE $3), 'YYYY-MM') AS "month", COUNT(*) bookings
        FROM bookings WHERE "studioId"=$1 AND "startsAt" >= $2 AND status <> 'CANCELLED'
        GROUP BY 1 ORDER BY 1`,
       [p.sid, yearAgo, studio.timezone],
