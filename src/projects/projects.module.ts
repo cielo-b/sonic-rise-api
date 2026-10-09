@@ -1,0 +1,40 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import {
+  Booking,
+  Deliverable,
+  DeliverableComment,
+  DeliverableVersion,
+  Project,
+  SessionNote,
+  Studio,
+  User,
+} from '../database/entities';
+import { StorageModule } from '../storage/storage.module';
+import { MailModule } from '../mail/mail.module';
+import { ProjectsService } from './projects.service';
+import {
+  DeliverablesController,
+  NotesController,
+  ProjectsController,
+} from './projects.controller';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([
+      Project,
+      SessionNote,
+      Deliverable,
+      DeliverableVersion,
+      DeliverableComment,
+      Booking,
+      User,
+      Studio,
+    ]),
+    StorageModule,
+    MailModule,
+  ],
+  controllers: [ProjectsController, NotesController, DeliverablesController],
+  providers: [ProjectsService],
+})
+export class ProjectsModule {}
