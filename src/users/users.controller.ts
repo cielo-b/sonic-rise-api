@@ -1,73 +1,104 @@
 import {
-  Controller,
-  Get,
-  Patch,
-  Param,
   Body,
-  UseGuards,
+  Controller,
   Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { UpdateMeDto } from './dto/update-me.dto';
+import { DeleteAccountDto, UpdateMeDto } from './dto/update-me.dto';
+import { UpdateTeamMemberDto } from './dto/team.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from '../common/guards/permissions.guard';
+import { Permission } from '../common/permissions';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Role } from '../database/enums';
+import { StudioId } from '../common/decorators/studio.decorator';
+import type { User } from '../database/entities';
 
-@ApiTags('Users')
+@ApiTags('Me')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('users')
-export class UsersController {
-  constructor(private usersService: UsersService) {}
+@UseGuards(JwtAuthGuard)
+@Controller('users/me')
+export class MeController {
+  constructor(private readonly svc: UsersService) {}
 
   @Get()
-  @Roles(Role.SUPERADMIN)
-  @ApiOperation({ summary: 'List all users (admin only)' })
-  findAll() {
-    return this.usersService.findAll();
+  get(@CurrentUser() user: User) {
+    return this.svc.me(user.id);
   }
 
-  @Get('me')
-  @ApiOperation({ summary: 'Get current user profile' })
-  getMe(@CurrentUser() user: { id: string }) {
-    return this.usersService.findOne(user.id);
+  @Patch()
+  update(@CurrentUser() user: User, @Body() dto: UpdateMeDto) {
+    return this.svc.updateMe(user, dto);
   }
 
-  @Get(':id')
-  @Roles(Role.SUPERADMIN)
-  @ApiOperation({ summary: 'Get user by ID' })
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  @Get('export')
+  @ApiOperation({ summary: 'Download all personal data held about me' })
+  export(@CurrentUser() user: User) {
+    return this.svc.exportMine(user);
   }
 
-  @Patch('me')
-  @ApiOperation({ summary: 'Update own profile' })
-  updateMe(@CurrentUser() user: { id: string }, @Body() dto: UpdateMeDto) {
-    return this.usersService.updateMe(user.id, dto);
+  @Post('delete')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Erase my personal data and close my account' })
+  remove(@CurrentUser() user: User, @Body() dto: DeleteAccountDto) {
+    return this.svc.deleteMine(user, dto);
+  }
+}
+
+@ApiTags('Team')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@Controller('team')
+export class TeamController {
+  constructor(private readonly svc: UsersService) {}
+
+  @Get()
+  @RequirePermissions(Permission.STAFF_MANAGE)
+  list(@StudioId() studioId: string) {
+    return this.svc.team(studioId);
   }
 
   @Patch(':id')
-  @Roles(Role.SUPERADMIN)
-  @ApiOperation({ summary: 'Update a user (admin only)' })
-  updateUser(@Param('id') id: string, @Body() dto: UpdateUserDto) {
-    return this.usersService.update(id, dto);
+  @RequirePermissions(Permission.STAFF_MANAGE)
+  update(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateTeamMemberDto,
+  ) {
+    return this.svc.updateMember(studioId, user, id, dto);
+  }
+
+  @Post(':id/resend-invite')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(Permission.STAFF_MANAGE)
+  resend(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.resendInvite(studioId, user, id);
   }
 
   @Delete(':id')
-  @Roles(Role.SUPERADMIN)
-  @ApiOperation({ summary: 'Deactivate a user (admin only)' })
-  deactivate(@Param('id') id: string) {
-    return this.usersService.deactivate(id);
-  }
-
-  @Delete(':id/hard')
-  @Roles(Role.SUPERADMIN)
-  @ApiOperation({ summary: 'Permanently delete a user (admin only)' })
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  @RequirePermissions(Permission.STAFF_MANAGE)
+  @ApiOperation({ summary: 'Withdraw a pending invitation' })
+  withdraw(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.removePendingInvite(studioId, user, id);
   }
 }
