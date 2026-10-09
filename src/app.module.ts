@@ -1,78 +1,71 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule } from '@nestjs/throttler';
-import {
-  User,
-  Booking,
-  Payment,
-  Portfolio,
-  Media,
-  LoginLog,
-  UserSession,
-} from './database/entities';
-import { Post } from './posts/post.entity';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ALL_ENTITIES, Studio } from './database/entities';
+import { TenantMiddleware } from './common/tenant/tenant.middleware';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { StudiosModule } from './studios/studios.module';
+import { ResourcesModule } from './resources/resources.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { PaymentsModule } from './payments/payments.module';
+import { BillingModule } from './billing/billing.module';
+import { ProjectsModule } from './projects/projects.module';
 import { ClientsModule } from './clients/clients.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 import { ContactModule } from './contact/contact.module';
-import { AnalyticsModule } from './analytics/analytics.module';
+import { ReportsModule } from './reports/reports.module';
 import { PostsModule } from './posts/posts.module';
 import { MediaModule } from './media/media.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
-    // ── Environment ───────────────────────────────────────────────────────
     ConfigModule.forRoot({ isGlobal: true }),
 
-    // ── Rate limiting ─────────────────────────────────────────────────────
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    // Applied to every route by the global guard below; auth routes are stricter.
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
 
-    // ── Database ──────────────────────────────────────────────────────────
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         type: 'postgres' as const,
         url: config.getOrThrow<string>('DATABASE_URL'),
-        entities: [
-          User,
-          Booking,
-          Payment,
-          Portfolio,
-          Post,
-          Media,
-          LoginLog,
-          UserSession,
-        ],
+        entities: ALL_ENTITIES,
         migrations: ['dist/database/migrations/*.js'],
-        migrationsRun: false,
+        migrationsRun: config.get<string>('NODE_ENV') === 'production',
         /**
-         * synchronize: true auto-creates tables to match entities.
-         * Enabled in development for rapid iteration; NEVER in production —
-         * use `npm run migration:run` instead.
+         * synchronize auto-creates tables in development only; production
+         * runs migrations on start.
          */
         synchronize: config.get<string>('NODE_ENV') !== 'production',
-        logging:
-          config.get<string>('NODE_ENV') === 'development'
-            ? (['query', 'error'] as const)
-            : (['error'] as const),
+        logging: ['error'],
       }),
     }),
+    TypeOrmModule.forFeature([Studio]),
 
-    // ── Feature modules ───────────────────────────────────────────────────
     AuthModule,
     UsersModule,
+    StudiosModule,
+    ResourcesModule,
     BookingsModule,
     PaymentsModule,
+    BillingModule,
+    ProjectsModule,
     ClientsModule,
     PortfolioModule,
     ContactModule,
-    AnalyticsModule,
+    ReportsModule,
     PostsModule,
     MediaModule,
+    UploadsModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(TenantMiddleware).forRoutes('*');
+  }
+}
