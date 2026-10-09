@@ -88,6 +88,20 @@ export class AuthController {
     );
   }
 
+  @Post('platform/login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(AUTH_LIMIT)
+  @ApiOperation({ summary: 'Sign in as a platform admin (ignores the studio)' })
+  platformLogin(@Body() dto: LoginDto, @Request() req: Req) {
+    return this.authService.login(
+      null,
+      dto.email,
+      dto.password,
+      req.ip,
+      req.headers['user-agent'],
+    );
+  }
+
   @Post('login/2fa')
   @HttpCode(HttpStatus.OK)
   @Throttle(AUTH_LIMIT)
