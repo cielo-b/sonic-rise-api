@@ -350,6 +350,15 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException('You cannot create bookings');
     }
 
+    // Without online payments the deposit is taken at the studio, so the
+    // booking must not wait (and expire) for an online deposit.
+    const onlinePayments = await this.studios
+      .createQueryBuilder('s')
+      .addSelect('s.pawapayApiTokenEnc')
+      .where('s.id = :id', { id: studioId })
+      .getOne()
+      .then((s) => !!s?.pawapayApiTokenEnc);
+
     const saved = await this.withStudioLock(studioId, async (m) => {
       const r = await this.resolve(studio, dto, asStaff, m);
       const total =
@@ -378,7 +387,7 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
 
       const status = asStaff
         ? (dto.status ?? BookingStatus.CONFIRMED)
-        : deposit > 0
+        : deposit > 0 && onlinePayments
           ? BookingStatus.PENDING_DEPOSIT
           : BookingStatus.PENDING;
 
