@@ -1,66 +1,98 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
   Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ClientsService } from './clients.service';
-import { CreateClientDto } from './dto/create-client.dto';
-import { UpdateClientDto } from './dto/update-client.dto';
+import {
+  CreateClientDto,
+  MessageClientDto,
+  UpdateClientDto,
+} from './dto/client.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
-import { Role } from '../database/enums';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from '../common/guards/permissions.guard';
+import { Permission } from '../common/permissions';
+import { StudioId } from '../common/decorators/studio.decorator';
+
+const Read = () => RequirePermissions(Permission.CLIENTS_READ);
+const Write = () => RequirePermissions(Permission.CLIENTS_WRITE);
 
 @ApiTags('Clients')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.SUPERADMIN)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('clients')
 export class ClientsController {
-  constructor(private clientsService: ClientsService) {}
-
-  @Post()
-  @ApiOperation({ summary: 'Create a client account (staff/admin)' })
-  create(@Body() dto: CreateClientDto) {
-    return this.clientsService.create(dto);
-  }
+  constructor(private readonly svc: ClientsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List all clients' })
-  findAll() {
-    return this.clientsService.findAll();
+  @Read()
+  list(@StudioId() s: string, @Query('q') q?: string) {
+    return this.svc.list(s, q);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get client detail with booking history' })
-  findOne(@Param('id') id: string) {
-    return this.clientsService.findOne(id);
+  @Read()
+  detail(@StudioId() s: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.detail(s, id);
+  }
+
+  @Post()
+  @Write()
+  create(@StudioId() s: string, @Body() dto: CreateClientDto) {
+    return this.svc.create(s, dto);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update client' })
-  update(@Param('id') id: string, @Body() dto: UpdateClientDto) {
-    return this.clientsService.update(id, dto);
+  @Write()
+  update(
+    @StudioId() s: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateClientDto,
+  ) {
+    return this.svc.update(s, id, dto);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete client' })
-  remove(@Param('id') id: string) {
-    return this.clientsService.delete(id);
+  @Write()
+  deactivate(@StudioId() s: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.deactivate(s, id);
+  }
+
+  @Post(':id/reactivate')
+  @HttpCode(HttpStatus.OK)
+  @Write()
+  reactivate(@StudioId() s: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.reactivate(s, id);
+  }
+
+  @Post(':id/invite')
+  @HttpCode(HttpStatus.OK)
+  @Write()
+  invite(@StudioId() s: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.invite(s, id);
   }
 
   @Post(':id/message')
-  @ApiOperation({ summary: 'Send email to client' })
-  sendMessage(
-    @Param('id') id: string,
-    @Body() body: { subject: string; message: string },
+  @HttpCode(HttpStatus.OK)
+  @Write()
+  message(
+    @StudioId() s: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MessageClientDto,
   ) {
-    return this.clientsService.sendMessage(id, body.subject, body.message);
+    return this.svc.message(s, id, dto.subject, dto.message);
   }
 }
