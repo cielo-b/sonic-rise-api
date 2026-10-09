@@ -23,7 +23,8 @@ export class PaymentsService {
       where: { id: dto.bookingId },
     });
     if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.clientId !== clientId) throw new NotFoundException('Booking not found');
+    if (booking.clientId !== clientId)
+      throw new NotFoundException('Booking not found');
 
     const existing = await this.paymentRepo.findOne({
       where: { bookingId: dto.bookingId, status: PaymentStatus.SUCCESS },
@@ -31,10 +32,10 @@ export class PaymentsService {
     if (existing) throw new BadRequestException('Booking is already paid');
 
     const payment = this.paymentRepo.create({
-      bookingId:     dto.bookingId,
-      amount:        dto.amount,
+      bookingId: dto.bookingId,
+      amount: dto.amount,
       paymentMethod: dto.paymentMethod,
-      status:        PaymentStatus.PENDING,
+      status: PaymentStatus.PENDING,
     });
     return this.paymentRepo.save(payment);
   }
@@ -50,9 +51,9 @@ export class PaymentsService {
     });
     if (!payment) return;
 
-    payment.status          = success ? PaymentStatus.SUCCESS : PaymentStatus.FAILED;
+    payment.status = success ? PaymentStatus.SUCCESS : PaymentStatus.FAILED;
     payment.gatewayResponse = gatewayData;
-    payment.paidAt          = success ? new Date() : null;
+    payment.paidAt = success ? new Date() : null;
     await this.paymentRepo.save(payment);
   }
 
@@ -65,11 +66,9 @@ export class PaymentsService {
 
   findAll(clientId: string, role: Role): Promise<Payment[]> {
     return this.paymentRepo.find({
-      where: role === Role.CLIENT
-        ? { booking: { clientId } }
-        : {},
+      where: role === Role.CLIENT ? { booking: { clientId } } : {},
       relations: { booking: true },
-      order:     { createdAt: 'DESC' },
+      order: { createdAt: 'DESC' },
     });
   }
 }

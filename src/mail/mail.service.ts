@@ -21,8 +21,8 @@ export class MailService {
   constructor(private readonly config: ConfigService) {
     this.from = config.getOrThrow<string>('EMAIL_FROM');
     this.transporter = nodemailer.createTransport({
-      host:   config.getOrThrow<string>('EMAIL_HOST'),
-      port:   config.get<number>('EMAIL_PORT', 587),
+      host: config.getOrThrow<string>('EMAIL_HOST'),
+      port: config.get<number>('EMAIL_PORT', 587),
       secure: config.get<string>('EMAIL_SECURE') === 'true',
       auth: {
         user: config.getOrThrow<string>('EMAIL_USER'),
@@ -73,9 +73,12 @@ export class MailService {
   }
 
   async sendInvite(to: string, inviteToken: string): Promise<void> {
-    const frontendUrl = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const frontendUrl = this.config.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:3000',
+    );
     const link = `${frontendUrl}/admin/accept-invite?token=${inviteToken}&email=${encodeURIComponent(to)}`;
-    
+
     const content = `
       <h2 style="font-size:24px;font-weight:700;margin:0 0 12px;color:#ffffff">You've been invited</h2>
       <p style="color:#929095;font-size:15px;margin:0 0 32px;line-height:1.6">You have been invited to join the SonicRise Cinematic Studio production suite. Click the button below to set up your account.</p>
@@ -84,13 +87,16 @@ export class MailService {
       </div>
       <p style="color:#47464B;font-size:12px;margin:0;text-align:center">This invitation expires in 7 days. If you didn't expect this email, you can safely ignore it.</p>
     `;
-    
+
     try {
       await this.transporter.sendMail({
-        from:    `"SonicRise Studio" <${this.from}>`,
+        from: `"SonicRise Studio" <${this.from}>`,
         to,
-        subject: 'You\'re invited to join SonicRise Production Suite',
-        html: this.getEmailTemplate(content, 'You have been invited to join SonicRise Studio'),
+        subject: "You're invited to join SonicRise Production Suite",
+        html: this.getEmailTemplate(
+          content,
+          'You have been invited to join SonicRise Studio',
+        ),
       });
       this.log.log(`Invite email sent to ${to}`);
     } catch (err) {
@@ -100,7 +106,11 @@ export class MailService {
   }
 
   async sendContactMessage(data: {
-    from: string; name: string; phone: string; subject: string; message: string;
+    from: string;
+    name: string;
+    phone: string;
+    subject: string;
+    message: string;
   }): Promise<void> {
     const content = `
       <h2 style="font-size:20px;font-weight:700;margin:0 0 24px;color:#ffffff">New Contact Message</h2>
@@ -119,14 +129,17 @@ export class MailService {
         <p style="margin:0;font-size:15px;line-height:1.7;white-space:pre-wrap;color:#C8C5CB">${esc(data.message)}</p>
       </div>
     `;
-    
+
     try {
       await this.transporter.sendMail({
-        from:    `"SonicRise Contact" <${this.from}>`,
-        to:      this.from,
+        from: `"SonicRise Contact" <${this.from}>`,
+        to: this.from,
         replyTo: data.from,
         subject: `[Contact] ${data.subject || 'New message'} — ${data.name}`,
-        html: this.getEmailTemplate(content, `New message from ${esc(data.name)}`),
+        html: this.getEmailTemplate(
+          content,
+          `New message from ${esc(data.name)}`,
+        ),
       });
     } catch (err) {
       this.log.error('Failed to send contact message', err);
@@ -134,18 +147,34 @@ export class MailService {
     }
   }
 
-  async sendBookingConfirmation(to: string, name: string, booking: {
-    id: string; serviceType: string; dateTime: Date; totalAmount: number; currency: string; notes: string | null;
-  }): Promise<void> {
+  async sendBookingConfirmation(
+    to: string,
+    name: string,
+    booking: {
+      id: string;
+      serviceType: string;
+      dateTime: Date;
+      totalAmount: number;
+      currency: string;
+      notes: string | null;
+    },
+  ): Promise<void> {
     const SERVICE_LABELS: Record<string, string> = {
-      AUDIO: 'Audio Session', VIDEO: 'Video Production',
-      PODCAST: 'Podcast Session', LIVESTREAM: 'Live Stream',
+      AUDIO: 'Audio Session',
+      VIDEO: 'Video Production',
+      PODCAST: 'Podcast Session',
+      LIVESTREAM: 'Live Stream',
     };
     const formattedDate = booking.dateTime.toLocaleDateString('en-US', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
       timeZone: 'Africa/Kigali',
     });
-    
+
     const content = `
       <h2 style="font-size:24px;font-weight:700;margin:0 0 8px;color:#ffffff">Booking Request Received</h2>
       <p style="color:#929095;font-size:15px;margin:0 0 32px;line-height:1.6">Hi ${esc(name)}, your session has been received and is pending confirmation from the team.</p>
@@ -164,24 +193,34 @@ export class MailService {
 
     try {
       await this.transporter.sendMail({
-        from:    `"SonicRise Studio" <${this.from}>`,
+        from: `"SonicRise Studio" <${this.from}>`,
         to,
         subject: `Booking Request Received — ${SERVICE_LABELS[booking.serviceType] ?? booking.serviceType}`,
-        html: this.getEmailTemplate(content, 'Your booking is pending confirmation'),
+        html: this.getEmailTemplate(
+          content,
+          'Your booking is pending confirmation',
+        ),
       });
     } catch (err) {
       this.log.error(`Failed to send booking confirmation to ${to}`, err);
     }
   }
 
-  async sendBookingStatusUpdate(to: string, name: string, status: string, bookingId: string): Promise<void> {
+  async sendBookingStatusUpdate(
+    to: string,
+    name: string,
+    status: string,
+    bookingId: string,
+  ): Promise<void> {
     const isConfirmed = status === 'CONFIRMED';
-    const subject     = isConfirmed ? 'Your booking is confirmed!' : 'Booking update from SonicRise';
-    const color       = isConfirmed ? '#3CD7FF' : '#EF4444';
-    const headline    = isConfirmed ? 'Session Confirmed' : 'Session Cancelled';
-    const body        = isConfirmed
+    const subject = isConfirmed
+      ? 'Your booking is confirmed!'
+      : 'Booking update from SonicRise';
+    const color = isConfirmed ? '#3CD7FF' : '#EF4444';
+    const headline = isConfirmed ? 'Session Confirmed' : 'Session Cancelled';
+    const body = isConfirmed
       ? 'Great news! Your session has been confirmed by the team. We look forward to seeing you at the studio.'
-      : 'Unfortunately your session has been cancelled. Please get in touch if you\'d like to reschedule.';
+      : "Unfortunately your session has been cancelled. Please get in touch if you'd like to reschedule.";
 
     const content = `
       <div style="display:inline-block;background:${color}15;border:1px solid ${color}40;color:${color};font-family:'Inter',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;padding:6px 14px;border-radius:20px;margin-bottom:20px;font-weight:700">${headline}</div>
@@ -196,10 +235,15 @@ export class MailService {
 
     try {
       await this.transporter.sendMail({
-        from:    `"SonicRise Studio" <${this.from}>`,
+        from: `"SonicRise Studio" <${this.from}>`,
         to,
         subject,
-        html: this.getEmailTemplate(content, isConfirmed ? 'Your session is confirmed' : 'Your session was cancelled'),
+        html: this.getEmailTemplate(
+          content,
+          isConfirmed
+            ? 'Your session is confirmed'
+            : 'Your session was cancelled',
+        ),
       });
     } catch (err) {
       this.log.error(`Failed to send status update to ${to}`, err);
@@ -220,10 +264,13 @@ export class MailService {
 
     try {
       await this.transporter.sendMail({
-        from:    `"SonicRise Studio" <${this.from}>`,
+        from: `"SonicRise Studio" <${this.from}>`,
         to,
         subject: 'Your SonicRise password reset code',
-        html: this.getEmailTemplate(content, 'Your password reset code is inside'),
+        html: this.getEmailTemplate(
+          content,
+          'Your password reset code is inside',
+        ),
       });
       this.log.log(`OTP email sent to ${to}`);
     } catch (err) {
@@ -232,7 +279,12 @@ export class MailService {
     }
   }
 
-  async sendDirectMessage(to: string, name: string, subject: string, message: string): Promise<void> {
+  async sendDirectMessage(
+    to: string,
+    name: string,
+    subject: string,
+    message: string,
+  ): Promise<void> {
     const content = `
       <h2 style="font-size:24px;font-weight:700;margin:0 0 16px;color:#ffffff">Hi ${esc(name)},</h2>
       <div style="background:#1B1B23;border:1px solid #2D2D38;border-radius:16px;padding:32px;margin:32px 0;box-shadow:inset 0 1px 0 rgba(255,255,255,0.05)">
@@ -243,10 +295,13 @@ export class MailService {
 
     try {
       await this.transporter.sendMail({
-        from:    `"SonicRise Studio" <${this.from}>`,
+        from: `"SonicRise Studio" <${this.from}>`,
         to,
         subject,
-        html: this.getEmailTemplate(content, 'You have a new message from SonicRise Studio'),
+        html: this.getEmailTemplate(
+          content,
+          'You have a new message from SonicRise Studio',
+        ),
       });
       this.log.log(`Direct message sent to ${to}`);
     } catch (err) {

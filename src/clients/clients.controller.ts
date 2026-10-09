@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { ClientsService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
@@ -48,7 +57,10 @@ export class ClientsController {
 
   @Post(':id/message')
   @ApiOperation({ summary: 'Send email to client' })
-  sendMessage(@Param('id') id: string, @Body() body: { subject: string; message: string }) {
+  sendMessage(
+    @Param('id') id: string,
+    @Body() body: { subject: string; message: string },
+  ) {
     return this.clientsService.sendMessage(id, body.subject, body.message);
   }
 }

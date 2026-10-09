@@ -6,14 +6,14 @@ export enum Role {
 }
 
 export enum ServiceType {
-  AUDIO      = 'AUDIO',
-  VIDEO      = 'VIDEO',
-  PODCAST    = 'PODCAST',
+  AUDIO = 'AUDIO',
+  VIDEO = 'VIDEO',
+  PODCAST = 'PODCAST',
   LIVESTREAM = 'LIVESTREAM',
 }
 
 export enum BookingStatus {
-  PENDING   = 'PENDING',
+  PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
@@ -22,10 +22,10 @@ export enum BookingStatus {
 export enum PaymentStatus {
   PENDING = 'PENDING',
   SUCCESS = 'SUCCESS',
-  FAILED  = 'FAILED',
+  FAILED = 'FAILED',
 }
 
 export enum PaymentMethod {
-  CARD         = 'CARD',
+  CARD = 'CARD',
   MOBILE_MONEY = 'MOBILE_MONEY',
 }

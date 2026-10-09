@@ -6,7 +6,7 @@ import { MailService } from '../mail/mail.service';
 
 class ContactDto {
   @ApiProperty() @IsString() name: string;
-  @ApiProperty() @IsEmail()  email: string;
+  @ApiProperty() @IsEmail() email: string;
   @ApiProperty({ required: false }) @IsString() @IsOptional() phone?: string;
   @ApiProperty({ required: false }) @IsString() @IsOptional() subject?: string;
   @ApiProperty() @IsString() @MinLength(10) message: string;
@@ -22,9 +22,9 @@ export class ContactController {
   @ApiOperation({ summary: 'Send a contact message to the studio' })
   async send(@Body() dto: ContactDto) {
     await this.mail.sendContactMessage({
-      from:    dto.email,
-      name:    dto.name,
-      phone:   dto.phone  ?? '',
+      from: dto.email,
+      name: dto.name,
+      phone: dto.phone ?? '',
       subject: dto.subject ?? 'General Enquiry',
       message: dto.message,
     });

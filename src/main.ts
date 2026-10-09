@@ -35,7 +35,7 @@ async function bootstrap() {
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('SonicRise API')
-      .setDescription("SonicRise Cinematic Studio — REST API")
+      .setDescription('SonicRise Cinematic Studio — REST API')
       .setVersion('1.0')
       .addBearerAuth()
       .build();

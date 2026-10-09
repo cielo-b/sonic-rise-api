@@ -1,10 +1,17 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Post } from './post.entity';
 
 function toSlug(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
 }
 
 import { IsString, IsOptional, IsBoolean } from 'class-validator';
@@ -63,8 +70,8 @@ export class PostsService {
 
   findAll(publishedOnly = true): Promise<Post[]> {
     return this.repo.find({
-      where:  publishedOnly ? { published: true } : {},
-      order:  { createdAt: 'DESC' },
+      where: publishedOnly ? { published: true } : {},
+      order: { createdAt: 'DESC' },
     });
   }
 
@@ -82,8 +89,15 @@ export class PostsService {
     const post = this.repo.create({
       ...dto,
       slug,
-      authorInitials: dto.authorInitials ?? dto.authorName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase(),
-      content:  dto.content  ?? '',
+      authorInitials:
+        dto.authorInitials ??
+        dto.authorName
+          .split(' ')
+          .map((n) => n[0])
+          .slice(0, 2)
+          .join('')
+          .toUpperCase(),
+      content: dto.content ?? '',
       readTime: dto.readTime ?? '5 min',
     });
     return this.repo.save(post);

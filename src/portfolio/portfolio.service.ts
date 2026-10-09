@@ -13,7 +13,9 @@ export class PortfolioService {
   ) {}
 
   findAll(): Promise<Portfolio[]> {
-    return this.portfolioRepo.find({ order: { sortOrder: 'ASC', createdAt: 'DESC' } });
+    return this.portfolioRepo.find({
+      order: { sortOrder: 'ASC', createdAt: 'DESC' },
+    });
   }
 
   findFeatured(): Promise<Portfolio[]> {

@@ -4,11 +4,11 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { User, LoginLog, UserSession } from '../database/entities';
-import { AuthService }    from './auth.service';
+import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { JwtStrategy }    from './strategies/jwt.strategy';
-import { LocalStrategy }  from './strategies/local.strategy';
-import { MailModule }     from '../mail/mail.module';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { LocalStrategy } from './strategies/local.strategy';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -18,14 +18,14 @@ import { MailModule }     from '../mail/mail.module';
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret:      config.getOrThrow<string>('JWT_SECRET'),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '7d') } as any,
+        secret: config.getOrThrow<string>('JWT_SECRET'),
+
+        signOptions: { expiresIn: config.get('JWT_EXPIRES_IN', '7d') },
       }),
     }),
   ],
   controllers: [AuthController],
-  providers:   [AuthService, JwtStrategy, LocalStrategy],
-  exports:     [AuthService],
+  providers: [AuthService, JwtStrategy, LocalStrategy],
+  exports: [AuthService],
 })
 export class AuthModule {}

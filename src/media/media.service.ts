@@ -17,7 +17,10 @@ export class MediaService {
     return this.mediaRepo.find({ where, order: { createdAt: 'DESC' } });
   }
 
-  async findOne(id: string, user?: { id: string; role: string }): Promise<Media> {
+  async findOne(
+    id: string,
+    user?: { id: string; role: string },
+  ): Promise<Media> {
     const where: any = { id };
     if (user?.role === 'CLIENT') where.clientId = user.id;
     const item = await this.mediaRepo.findOne({ where });

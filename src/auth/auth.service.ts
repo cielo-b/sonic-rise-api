@@ -60,7 +60,9 @@ export class AuthService {
         device: this.parseDevice(userAgent),
       });
       await this.loginLogRepo.save(log);
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
   }
 
   async getLoginHistory(userId: string) {
@@ -72,7 +74,12 @@ export class AuthService {
   }
 
   // ─── Sessions ────────────────────────────────────────────────────────────────
-  async createSession(userId: string, jti: string, ip?: string, userAgent?: string) {
+  async createSession(
+    userId: string,
+    jti: string,
+    ip?: string,
+    userAgent?: string,
+  ) {
     const expiresIn = this.config.get('JWT_EXPIRES_IN', '7d');
     const ms = expiresIn.endsWith('d')
       ? parseInt(expiresIn) * 86400 * 1000
@@ -97,14 +104,19 @@ export class AuthService {
   }
 
   async revokeSession(userId: string, sessionId: string) {
-    const session = await this.sessionRepo.findOne({ where: { id: sessionId, userId } });
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId, userId },
+    });
     if (!session) throw new BadRequestException('Session not found');
     session.revoked = true;
     await this.sessionRepo.save(session);
   }
 
   async revokeAllSessions(userId: string) {
-    await this.sessionRepo.update({ userId, revoked: false }, { revoked: true });
+    await this.sessionRepo.update(
+      { userId, revoked: false },
+      { revoked: true },
+    );
   }
 
   async isSessionValid(jti: string): Promise<boolean> {
@@ -116,9 +128,14 @@ export class AuthService {
   }
 
   // ─── 2FA ─────────────────────────────────────────────────────────────────────
-  async generate2FASecret(userId: string): Promise<{ secret: string; qrDataUrl: string }> {
+  async generate2FASecret(
+    userId: string,
+  ): Promise<{ secret: string; qrDataUrl: string }> {
     const user = await this.userRepo.findOneOrFail({ where: { id: userId } });
-    const secretObj = speakeasy.generateSecret({ name: `SonicRise (${user.email})`, issuer: 'SonicRise Studio' });
+    const secretObj = speakeasy.generateSecret({
+      name: `SonicRise (${user.email})`,
+      issuer: 'SonicRise Studio',
+    });
     const secret = secretObj.base32;
     const qrDataUrl = await QRCode.toDataURL(secretObj.otpauth_url!);
 
@@ -134,7 +151,12 @@ export class AuthService {
       .getOne();
 
     if (!user?.twoFaSecret) throw new BadRequestException('Setup 2FA first');
-    const valid = speakeasy.totp.verify({ token: code, secret: user.twoFaSecret, encoding: 'base32', window: 1 });
+    const valid = speakeasy.totp.verify({
+      token: code,
+      secret: user.twoFaSecret,
+      encoding: 'base32',
+      window: 1,
+    });
     if (!valid) throw new BadRequestException('Invalid 2FA code');
     await this.userRepo.update(userId, { twoFaEnabled: true });
   }
@@ -146,10 +168,19 @@ export class AuthService {
       .where('u.id = :id', { id: userId })
       .getOne();
 
-    if (!user?.twoFaEnabled || !user?.twoFaSecret) throw new BadRequestException('2FA is not enabled');
-    const valid = speakeasy.totp.verify({ token: code, secret: user.twoFaSecret, encoding: 'base32', window: 1 });
+    if (!user?.twoFaEnabled || !user?.twoFaSecret)
+      throw new BadRequestException('2FA is not enabled');
+    const valid = speakeasy.totp.verify({
+      token: code,
+      secret: user.twoFaSecret,
+      encoding: 'base32',
+      window: 1,
+    });
     if (!valid) throw new BadRequestException('Invalid 2FA code');
-    await this.userRepo.update(userId, { twoFaEnabled: false, twoFaSecret: null });
+    await this.userRepo.update(userId, {
+      twoFaEnabled: false,
+      twoFaSecret: null,
+    });
   }
 
   async verify2FACode(userId: string, code: string): Promise<boolean> {
@@ -159,7 +190,12 @@ export class AuthService {
       .where('u.id = :id', { id: userId })
       .getOne();
     if (!user?.twoFaSecret) return false;
-    return speakeasy.totp.verify({ token: code, secret: user.twoFaSecret, encoding: 'base32', window: 1 });
+    return speakeasy.totp.verify({
+      token: code,
+      secret: user.twoFaSecret,
+      encoding: 'base32',
+      window: 1,
+    });
   }
 
   // ─── Register ────────────────────────────────────────────────────────────────
@@ -169,11 +205,11 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = this.userRepo.create({
-      name:         dto.name,
-      email:        dto.email,
-      phone:        dto.phone ?? null,
+      name: dto.name,
+      email: dto.email,
+      phone: dto.phone ?? null,
       passwordHash,
-      role:         Role.CLIENT,
+      role: Role.CLIENT,
     });
     await this.userRepo.save(user);
     return this.signToken(user);
@@ -209,38 +245,47 @@ export class AuthService {
     return this.signToken(user, ip, userAgent);
   }
 
-  async loginWith2FA(tempToken: string, code: string, ip?: string, userAgent?: string) {
+  async loginWith2FA(
+    tempToken: string,
+    code: string,
+    ip?: string,
+    userAgent?: string,
+  ) {
     let payload: any;
     try {
       payload = this.jwt.verify(tempToken);
     } catch {
       throw new UnauthorizedException('Invalid or expired session');
     }
-    if (!payload.pending2fa) throw new UnauthorizedException('Token is not a 2FA challenge');
+    if (!payload.pending2fa)
+      throw new UnauthorizedException('Token is not a 2FA challenge');
 
     const valid = await this.verify2FACode(payload.sub, code);
     if (!valid) throw new UnauthorizedException('Invalid 2FA code');
 
-    const user = await this.userRepo.findOneOrFail({ where: { id: payload.sub } });
+    const user = await this.userRepo.findOneOrFail({
+      where: { id: payload.sub },
+    });
     return this.signToken(user, ip, userAgent);
   }
 
   // ─── Invite flow ─────────────────────────────────────────────────────────────
   async sendInvite(email: string, role?: Role): Promise<void> {
-    const existing = await this.userRepo.createQueryBuilder('u')
+    const existing = await this.userRepo
+      .createQueryBuilder('u')
       .where('LOWER(u.email) = LOWER(:email)', { email: email.trim() })
       .getOne();
     if (existing) throw new ConflictException('Email already registered');
 
-    const inviteToken  = randomUUID();
+    const inviteToken = randomUUID();
     const inviteExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     const placeholder = this.userRepo.create({
-      name:         email.split('@')[0],
+      name: email.split('@')[0],
       email,
       passwordHash: await bcrypt.hash(randomUUID(), 4),
-      role:         role ?? Role.CLIENT,
-      isActive:     false,
+      role: role ?? Role.CLIENT,
+      isActive: false,
       inviteToken,
       inviteExpiry,
     });
@@ -248,7 +293,11 @@ export class AuthService {
     await this.mail.sendInvite(email, inviteToken);
   }
 
-  async acceptInvite(token: string, name: string, password: string): Promise<void> {
+  async acceptInvite(
+    token: string,
+    name: string,
+    password: string,
+  ): Promise<void> {
     const user = await this.userRepo
       .createQueryBuilder('u')
       .addSelect('u.inviteToken')
@@ -260,7 +309,9 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired invitation link');
     }
     if (new Date() > user.inviteExpiry) {
-      throw new BadRequestException('Invitation has expired — ask an admin to resend it');
+      throw new BadRequestException(
+        'Invitation has expired — ask an admin to resend it',
+      );
     }
 
     await this.userRepo.update(user.id, {
@@ -277,13 +328,13 @@ export class AuthService {
     const user = await this.userRepo.findOne({ where: { email } });
     if (!user) return;
 
-    const otp      = Math.floor(100_000 + Math.random() * 900_000).toString();
-    const otpHash  = crypto.createHash('sha256').update(otp).digest('hex');
+    const otp = Math.floor(100_000 + Math.random() * 900_000).toString();
+    const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    user.otpHash         = otpHash;
-    user.otpExpiry       = otpExpiry;
-    user.resetToken      = null;
+    user.otpHash = otpHash;
+    user.otpExpiry = otpExpiry;
+    user.resetToken = null;
     user.resetTokenExpiry = null;
     await this.userRepo.save(user);
     await this.mail.sendOtp(user.email, user.name, otp);
@@ -301,16 +352,18 @@ export class AuthService {
       throw new BadRequestException('No reset request found for this email');
     }
     if (new Date() > user.otpExpiry) {
-      throw new BadRequestException('Code has expired — please request a new one');
+      throw new BadRequestException(
+        'Code has expired — please request a new one',
+      );
     }
 
     const hash = crypto.createHash('sha256').update(otp).digest('hex');
     if (hash !== user.otpHash) throw new BadRequestException('Incorrect code');
 
-    const resetToken      = randomUUID();
-    user.otpHash          = null;
-    user.otpExpiry        = null;
-    user.resetToken       = resetToken;
+    const resetToken = randomUUID();
+    user.otpHash = null;
+    user.otpExpiry = null;
+    user.resetToken = resetToken;
     user.resetTokenExpiry = new Date(Date.now() + 30 * 60 * 1000);
     await this.userRepo.save(user);
     return { resetToken };
@@ -328,7 +381,9 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired reset link');
     }
     if (new Date() > user.resetTokenExpiry) {
-      throw new BadRequestException('Reset link has expired — please start over');
+      throw new BadRequestException(
+        'Reset link has expired — please start over',
+      );
     }
 
     await this.userRepo.update(user.id, {
@@ -348,11 +403,11 @@ export class AuthService {
       access_token: token,
       token_type: 'Bearer',
       user: {
-        id:           user.id,
-        name:         user.name,
-        email:        user.email,
-        role:         user.role,
-        avatarUrl:    user.avatarUrl,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatarUrl: user.avatarUrl,
         twoFaEnabled: user.twoFaEnabled,
       },
     };

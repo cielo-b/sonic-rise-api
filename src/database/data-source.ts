@@ -12,10 +12,10 @@ import { DataSource } from 'typeorm';
 import { User, Booking, Payment, Portfolio } from './entities';
 
 export const AppDataSource = new DataSource({
-  type:        'postgres',
-  url:         process.env.DATABASE_URL,
+  type: 'postgres',
+  url: process.env.DATABASE_URL,
   synchronize: false,
-  logging:     ['error', 'warn'],
-  entities:    [User, Booking, Payment, Portfolio],
-  migrations:  ['src/database/migrations/*.ts'],
+  logging: ['error', 'warn'],
+  entities: [User, Booking, Payment, Portfolio],
+  migrations: ['src/database/migrations/*.ts'],
 });

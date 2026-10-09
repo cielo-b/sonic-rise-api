@@ -15,7 +15,7 @@ import {
 @Entity('portfolio')
 @Index(['category'])
 @Index(['sortOrder'])
-@Index(['isFeatured', 'sortOrder'])  // homepage featured-grid query
+@Index(['isFeatured', 'sortOrder']) // homepage featured-grid query
 export class Portfolio {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../database/entities';
@@ -38,10 +42,11 @@ export class UsersService {
 
   async update(id: string, dto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
-    
+
     const payload: Partial<User> = {};
     if (dto.email && dto.email !== user.email) {
-      const existing = await this.userRepo.createQueryBuilder('u')
+      const existing = await this.userRepo
+        .createQueryBuilder('u')
         .where('LOWER(u.email) = LOWER(:email)', { email: dto.email.trim() })
         .getOne();
       if (existing) throw new ConflictException('Email already registered');
@@ -54,11 +59,11 @@ export class UsersService {
 
     const { password, email, ...rest } = dto;
     Object.assign(payload, rest);
-    
+
     if (Object.keys(payload).length > 0) {
       await this.userRepo.update(user.id, payload);
     }
-    
+
     return this.findOne(id);
   }
 

@@ -16,7 +16,10 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../database/enums';
 
-interface AuthUser { id: string; role: Role }
+interface AuthUser {
+  id: string;
+  role: Role;
+}
 
 @ApiTags('Bookings')
 @ApiBearerAuth()
@@ -32,7 +35,9 @@ export class BookingsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List bookings (own for clients, all for staff/admin)' })
+  @ApiOperation({
+    summary: 'List bookings (own for clients, all for staff/admin)',
+  })
   findAll(@CurrentUser() user: AuthUser) {
     return this.bookingsService.findAll(user.id, user.role);
   }

@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsDateString, IsOptional, IsNumber, IsPositive, IsString } from 'class-validator';
+import {
+  IsEnum,
+  IsDateString,
+  IsOptional,
+  IsNumber,
+  IsPositive,
+  IsString,
+} from 'class-validator';
 import { ServiceType } from '../../database/enums';
 
 export class CreateBookingDto {

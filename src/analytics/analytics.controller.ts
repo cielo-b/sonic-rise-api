@@ -1,11 +1,16 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
-import { JwtAuthGuard }     from '../common/guards/jwt-auth.guard';
-import { RolesGuard }       from '../common/guards/roles.guard';
-import { Roles }            from '../common/decorators/roles.decorator';
-import { CurrentUser }      from '../common/decorators/current-user.decorator';
-import { Role }             from '../database/enums';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Role } from '../database/enums';
 
 @ApiTags('Analytics')
 @ApiBearerAuth()
@@ -24,9 +29,13 @@ export class AnalyticsController {
 
   @Get('services')
   @ApiOperation({ summary: 'Booking volume by service type (%)' })
-  services(@CurrentUser() user?: any) { return this.svc.services(user); }
+  services(@CurrentUser() user?: any) {
+    return this.svc.services(user);
+  }
 
   @Get('summary')
   @ApiOperation({ summary: 'Top-level KPI summary' })
-  summary(@CurrentUser() user?: any) { return this.svc.summary(user); }
+  summary(@CurrentUser() user?: any) {
+    return this.svc.summary(user);
+  }
 }

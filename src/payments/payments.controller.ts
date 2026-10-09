@@ -6,7 +6,10 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../database/enums';
 
-interface AuthUser { id: string; role: Role }
+interface AuthUser {
+  id: string;
+  role: Role;
+}
 
 @ApiTags('Payments')
 @ApiBearerAuth()

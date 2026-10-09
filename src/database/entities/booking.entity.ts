@@ -15,15 +15,15 @@ import { Payment } from './payment.entity';
 
 /** Reusable transformer: stores Decimal as numeric in PG, returns JS number. */
 const decimalTransformer = {
-  to:   (v: number)  => v,
-  from: (v: string)  => (v === null ? null : parseFloat(v)),
+  to: (v: number) => v,
+  from: (v: string) => (v === null ? null : parseFloat(v)),
 };
 
 @Entity('bookings')
 @Index(['status'])
 @Index(['dateTime'])
 @Index(['serviceType'])
-@Index(['clientId', 'status'])   // "my active bookings" client-dashboard query
+@Index(['clientId', 'status']) // "my active bookings" client-dashboard query
 export class Booking {
   @PrimaryGeneratedColumn('uuid')
   id: string;

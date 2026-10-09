@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -25,14 +29,14 @@ export class ClientsService {
     const passwordToHash = dto.password || randomUUID();
     const passwordHash = await bcrypt.hash(passwordToHash, 12);
     const client = this.userRepo.create({
-      name:         dto.name,
-      email:        dto.email,
-      phone:        dto.phone ?? null,
-      company:      dto.company ?? null,
-      category:     dto.category ?? null,
-      notes:        dto.notes ?? null,
+      name: dto.name,
+      email: dto.email,
+      phone: dto.phone ?? null,
+      company: dto.company ?? null,
+      category: dto.category ?? null,
+      notes: dto.notes ?? null,
       passwordHash,
-      role:         Role.CLIENT,
+      role: Role.CLIENT,
     });
     return this.userRepo.save(client);
   }
@@ -47,34 +51,50 @@ export class ClientsService {
 
   async findOne(id: string): Promise<User & { bookings: unknown }> {
     const client = await this.userRepo.findOne({
-      where:     { id, role: Role.CLIENT },
+      where: { id, role: Role.CLIENT },
       relations: { bookings: true },
     });
     if (!client) throw new NotFoundException(`Client ${id} not found`);
-    return client as User & { bookings: unknown };
+    return client;
   }
 
   async update(id: string, dto: UpdateClientDto): Promise<User> {
-    const client = await this.userRepo.findOne({ where: { id, role: Role.CLIENT } });
+    const client = await this.userRepo.findOne({
+      where: { id, role: Role.CLIENT },
+    });
     if (!client) throw new NotFoundException(`Client ${id} not found`);
-    
+
     Object.assign(client, dto);
     return this.userRepo.save(client);
   }
 
   async delete(id: string): Promise<void> {
-    const client = await this.userRepo.findOne({ where: { id, role: Role.CLIENT } });
+    const client = await this.userRepo.findOne({
+      where: { id, role: Role.CLIENT },
+    });
     if (!client) throw new NotFoundException(`Client ${id} not found`);
-    
+
     client.isActive = false;
     await this.userRepo.save(client);
   }
 
-  async sendMessage(id: string, subject: string, message: string): Promise<void> {
-    const client = await this.userRepo.findOne({ where: { id, role: Role.CLIENT } });
+  async sendMessage(
+    id: string,
+    subject: string,
+    message: string,
+  ): Promise<void> {
+    const client = await this.userRepo.findOne({
+      where: { id, role: Role.CLIENT },
+    });
     if (!client) throw new NotFoundException(`Client ${id} not found`);
-    if (!client.email) throw new ConflictException(`Client ${id} has no email address`);
+    if (!client.email)
+      throw new ConflictException(`Client ${id} has no email address`);
 
-    await this.mailService.sendDirectMessage(client.email, client.name, subject, message);
+    await this.mailService.sendDirectMessage(
+      client.email,
+      client.name,
+      subject,
+      message,
+    );
   }
 }

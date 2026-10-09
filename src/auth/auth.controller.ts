@@ -24,8 +24,13 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { IsString } from 'class-validator';
 
-class Verify2FADto { @IsString() code: string; }
-class Login2FADto { @IsString() tempToken: string; @IsString() code: string; }
+class Verify2FADto {
+  @IsString() code: string;
+}
+class Login2FADto {
+  @IsString() tempToken: string;
+  @IsString() code: string;
+}
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -44,9 +49,14 @@ export class AuthController {
   @ApiOperation({ summary: 'Authenticate and receive JWT' })
   login(
     @Body() _dto: LoginDto,
-    @Request() req: { user: { id: string }; ip: string; headers: Record<string, string> },
+    @Request()
+    req: { user: { id: string }; ip: string; headers: Record<string, string> },
   ) {
-    return this.authService.login(req.user.id, req.ip, req.headers['user-agent']);
+    return this.authService.login(
+      req.user.id,
+      req.ip,
+      req.headers['user-agent'],
+    );
   }
 
   @Post('login/2fa')
@@ -56,7 +66,12 @@ export class AuthController {
     @Body() dto: Login2FADto,
     @Request() req: { ip: string; headers: Record<string, string> },
   ) {
-    return this.authService.loginWith2FA(dto.tempToken, dto.code, req.ip, req.headers['user-agent']);
+    return this.authService.loginWith2FA(
+      dto.tempToken,
+      dto.code,
+      req.ip,
+      req.headers['user-agent'],
+    );
   }
 
   @Post('refresh')
@@ -149,7 +164,10 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke a specific session' })
-  revokeSession(@CurrentUser() user: { id: string }, @Param('id') sessionId: string) {
+  revokeSession(
+    @CurrentUser() user: { id: string },
+    @Param('id') sessionId: string,
+  ) {
     return this.authService.revokeSession(user.id, sessionId);
   }
 

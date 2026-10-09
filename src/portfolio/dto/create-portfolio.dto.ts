@@ -1,7 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsString, IsUrl, IsBoolean, IsOptional,
-  IsInt, Min, IsArray,
+  IsString,
+  IsUrl,
+  IsBoolean,
+  IsOptional,
+  IsInt,
+  Min,
+  IsArray,
 } from 'class-validator';
 
 export class CreatePortfolioDto {

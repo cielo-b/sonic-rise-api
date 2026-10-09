@@ -12,14 +12,14 @@ import { PaymentMethod, PaymentStatus } from '../enums';
 import { Booking } from './booking.entity';
 
 const decimalTransformer = {
-  to:   (v: number) => v,
+  to: (v: number) => v,
   from: (v: string) => (v === null ? null : parseFloat(v)),
 };
 
 @Entity('payments')
 @Index(['status'])
 @Index(['paymentMethod'])
-@Index(['bookingId', 'status'])  // "is this booking settled?" fast lookup
+@Index(['bookingId', 'status']) // "is this booking settled?" fast lookup
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;

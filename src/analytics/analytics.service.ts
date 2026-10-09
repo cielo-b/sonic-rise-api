@@ -4,7 +4,20 @@ import { Repository } from 'typeorm';
 import { Booking } from '../database/entities';
 import { BookingStatus } from '../database/enums';
 
-const MONTH_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const MONTH_ABBR = [
+  'JAN',
+  'FEB',
+  'MAR',
+  'APR',
+  'MAY',
+  'JUN',
+  'JUL',
+  'AUG',
+  'SEP',
+  'OCT',
+  'NOV',
+  'DEC',
+];
 
 @Injectable()
 export class AnalyticsService {
@@ -27,27 +40,28 @@ export class AnalyticsService {
       qb.andWhere('b.clientId = :clientId', { clientId: user.id });
     }
 
-    const rows: { month: string; bookings: string; revenue: string }[] = await qb
-      .groupBy('EXTRACT(MONTH FROM b.dateTime)::int')
-      .orderBy('EXTRACT(MONTH FROM b.dateTime)::int', 'ASC')
-      .getRawMany();
+    const rows: { month: string; bookings: string; revenue: string }[] =
+      await qb
+        .groupBy('EXTRACT(MONTH FROM b.dateTime)::int')
+        .orderBy('EXTRACT(MONTH FROM b.dateTime)::int', 'ASC')
+        .getRawMany();
 
     // Fill all 12 months — zero if no bookings that month
     return Array.from({ length: 12 }, (_, i) => {
       const row = rows.find((r) => Number(r.month) === i + 1);
       return {
-        month:    MONTH_ABBR[i],
+        month: MONTH_ABBR[i],
         bookings: row ? Number(row.bookings) : 0,
-        revenue:  row ? parseFloat(row.revenue) : 0,
+        revenue: row ? parseFloat(row.revenue) : 0,
       };
     });
   }
 
   async services(user?: { id: string; role: string }) {
     const SERVICE_LABELS: Record<string, string> = {
-      AUDIO:      'Audio Sessions',
-      VIDEO:      'Video Production',
-      PODCAST:    'Podcast Sessions',
+      AUDIO: 'Audio Sessions',
+      VIDEO: 'Video Production',
+      PODCAST: 'Podcast Sessions',
       LIVESTREAM: 'Live Streams',
     };
 
@@ -68,7 +82,7 @@ export class AnalyticsService {
     const total = rows.reduce((s, r) => s + Number(r.count), 0) || 1;
     return rows.map((r) => ({
       label: SERVICE_LABELS[r.serviceType] ?? r.serviceType,
-      pct:   Math.round((Number(r.count) / total) * 100),
+      pct: Math.round((Number(r.count) / total) * 100),
     }));
   }
 
@@ -87,14 +101,16 @@ export class AnalyticsService {
         .createQueryBuilder('b')
         .select('COALESCE(SUM(b.totalAmount), 0)', 'total')
         .where('b.status = :s', { s: BookingStatus.COMPLETED })
-        .andWhere(user?.role === 'CLIENT' ? 'b.clientId = :clientId' : '1=1', { clientId: user?.id })
+        .andWhere(user?.role === 'CLIENT' ? 'b.clientId = :clientId' : '1=1', {
+          clientId: user?.id,
+        })
         .getRawOne<{ total: string }>(),
     ]);
 
     return {
-      totalBookings:  total,
+      totalBookings: total,
       activeBookings: active,
-      totalRevenue:   parseFloat(revenue?.total ?? '0'),
+      totalRevenue: parseFloat(revenue?.total ?? '0'),
     };
   }
 }
