@@ -39,7 +39,8 @@ export class StudioController {
   @Get()
   @ApiOperation({ summary: 'Public profile of the current studio (website)' })
   profile(@CurrentStudio() studio: Studio) {
-    return this.svc.publicProfile(studio);
+    // req.studio is cached briefly; read fresh so edits show immediately.
+    return this.svc.publicProfileById(studio.id);
   }
 
   @Get('settings')

@@ -65,6 +65,12 @@ export class StudiosService {
     };
   }
 
+  async publicProfileById(studioId: string) {
+    const studio = await this.studios.findOne({ where: { id: studioId } });
+    if (!studio) throw new NotFoundException('Studio not found');
+    return this.publicProfile(studio);
+  }
+
   async settings(studioId: string) {
     const studio = await this.studios
       .createQueryBuilder('s')
