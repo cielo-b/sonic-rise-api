@@ -66,9 +66,17 @@ export class StudiosService {
   }
 
   async publicProfileById(studioId: string) {
-    const studio = await this.studios.findOne({ where: { id: studioId } });
+    const studio = await this.studios
+      .createQueryBuilder('s')
+      .addSelect('s.pawapayApiTokenEnc')
+      .where('s.id = :id', { id: studioId })
+      .getOne();
     if (!studio) throw new NotFoundException('Studio not found');
-    return this.publicProfile(studio);
+    // Whether clients can pay online (never the credentials themselves).
+    return {
+      ...this.publicProfile(studio),
+      onlinePayments: !!studio.pawapayApiTokenEnc,
+    };
   }
 
   async settings(studioId: string) {
