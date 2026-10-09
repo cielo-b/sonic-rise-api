@@ -2,6 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
+/** Escapes user-supplied text before it is interpolated into email HTML. */
+function esc(value: string | number | null | undefined): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 @Injectable()
 export class MailService {
   private readonly log = new Logger(MailService.name);
@@ -97,16 +107,16 @@ export class MailService {
       
       <div style="background:#1B1B23;border:1px solid #2D2D38;border-radius:16px;padding:24px;margin-bottom:24px">
         <table style="width:100%;border-collapse:collapse">
-          <tr><td style="padding:8px 0;color:#929095;font-size:13px;width:100px;border-bottom:1px solid #2D2D38">Name</td><td style="padding:8px 0;font-size:14px;color:#E4E1EC;border-bottom:1px solid #2D2D38">${data.name}</td></tr>
-          <tr><td style="padding:8px 0;color:#929095;font-size:13px;border-bottom:1px solid #2D2D38">Email</td><td style="padding:8px 0;font-size:14px;color:#3CD7FF;border-bottom:1px solid #2D2D38"><a href="mailto:${data.from}" style="color:#3CD7FF;text-decoration:none">${data.from}</a></td></tr>
-          <tr><td style="padding:8px 0;color:#929095;font-size:13px;border-bottom:1px solid #2D2D38">Phone</td><td style="padding:8px 0;font-size:14px;color:#E4E1EC;border-bottom:1px solid #2D2D38">${data.phone || '—'}</td></tr>
-          <tr><td style="padding:8px 0;color:#929095;font-size:13px">Subject</td><td style="padding:8px 0;font-size:14px;color:#E4E1EC">${data.subject || '—'}</td></tr>
+          <tr><td style="padding:8px 0;color:#929095;font-size:13px;width:100px;border-bottom:1px solid #2D2D38">Name</td><td style="padding:8px 0;font-size:14px;color:#E4E1EC;border-bottom:1px solid #2D2D38">${esc(data.name)}</td></tr>
+          <tr><td style="padding:8px 0;color:#929095;font-size:13px;border-bottom:1px solid #2D2D38">Email</td><td style="padding:8px 0;font-size:14px;color:#3CD7FF;border-bottom:1px solid #2D2D38"><a href="mailto:${esc(data.from)}" style="color:#3CD7FF;text-decoration:none">${esc(data.from)}</a></td></tr>
+          <tr><td style="padding:8px 0;color:#929095;font-size:13px;border-bottom:1px solid #2D2D38">Phone</td><td style="padding:8px 0;font-size:14px;color:#E4E1EC;border-bottom:1px solid #2D2D38">${esc(data.phone || '—')}</td></tr>
+          <tr><td style="padding:8px 0;color:#929095;font-size:13px">Subject</td><td style="padding:8px 0;font-size:14px;color:#E4E1EC">${esc(data.subject || '—')}</td></tr>
         </table>
       </div>
       
       <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#929095;margin:0 0 12px">Message Body</h3>
       <div style="background:#13131A;border:1px solid #2D2D38;border-radius:12px;padding:24px;border-left:4px solid #7C3AED">
-        <p style="margin:0;font-size:15px;line-height:1.7;white-space:pre-wrap;color:#C8C5CB">${data.message}</p>
+        <p style="margin:0;font-size:15px;line-height:1.7;white-space:pre-wrap;color:#C8C5CB">${esc(data.message)}</p>
       </div>
     `;
     
@@ -116,7 +126,7 @@ export class MailService {
         to:      this.from,
         replyTo: data.from,
         subject: `[Contact] ${data.subject || 'New message'} — ${data.name}`,
-        html: this.getEmailTemplate(content, `New message from ${data.name}`),
+        html: this.getEmailTemplate(content, `New message from ${esc(data.name)}`),
       });
     } catch (err) {
       this.log.error('Failed to send contact message', err);
@@ -133,11 +143,12 @@ export class MailService {
     };
     const formattedDate = booking.dateTime.toLocaleDateString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      timeZone: 'Africa/Kigali',
     });
     
     const content = `
-      <h2 style="font-size:24px;font-weight:700;margin:0 0 8px;color:#ffffff">Booking Confirmed!</h2>
-      <p style="color:#929095;font-size:15px;margin:0 0 32px;line-height:1.6">Hi ${name}, your session has been received and is pending confirmation from the team.</p>
+      <h2 style="font-size:24px;font-weight:700;margin:0 0 8px;color:#ffffff">Booking Request Received</h2>
+      <p style="color:#929095;font-size:15px;margin:0 0 32px;line-height:1.6">Hi ${esc(name)}, your session has been received and is pending confirmation from the team.</p>
       
       <div style="background:#1B1B23;border:1px solid #2D2D38;border-radius:16px;padding:28px;margin-bottom:32px">
         <table style="width:100%;border-collapse:collapse">
@@ -146,7 +157,7 @@ export class MailService {
           <tr><td style="padding:10px 0;color:#929095;font-size:13px;border-bottom:1px solid #2D2D38">Amount</td><td style="padding:10px 0;font-size:16px;color:#3CD7FF;font-weight:700;border-bottom:1px solid #2D2D38">${booking.totalAmount.toLocaleString()} ${booking.currency}</td></tr>
           <tr><td style="padding:10px 0;color:#929095;font-size:13px">Booking ID</td><td style="padding:10px 0;font-size:13px;font-family:monospace;color:#929095">${booking.id}</td></tr>
         </table>
-        ${booking.notes ? `<div style="margin-top:20px;padding-top:20px;border-top:1px dashed #2D2D38"><p style="margin:0;color:#C8C5CB;font-size:14px;line-height:1.6"><span style="color:#929095;font-size:12px;text-transform:uppercase;display:block;margin-bottom:4px">Notes</span>${booking.notes}</p></div>` : ''}
+        ${booking.notes ? `<div style="margin-top:20px;padding-top:20px;border-top:1px dashed #2D2D38"><p style="margin:0;color:#C8C5CB;font-size:14px;line-height:1.6"><span style="color:#929095;font-size:12px;text-transform:uppercase;display:block;margin-bottom:4px">Notes</span>${esc(booking.notes)}</p></div>` : ''}
       </div>
       <p style="color:#929095;font-size:13px;margin:0;line-height:1.6">Please arrive 15 minutes before your session. Max 3 guests. Reply to this email with any questions.</p>
     `;
@@ -155,7 +166,7 @@ export class MailService {
       await this.transporter.sendMail({
         from:    `"SonicRise Studio" <${this.from}>`,
         to,
-        subject: `Booking Confirmed — ${SERVICE_LABELS[booking.serviceType] ?? booking.serviceType}`,
+        subject: `Booking Request Received — ${SERVICE_LABELS[booking.serviceType] ?? booking.serviceType}`,
         html: this.getEmailTemplate(content, 'Your booking is pending confirmation'),
       });
     } catch (err) {
@@ -174,7 +185,7 @@ export class MailService {
 
     const content = `
       <div style="display:inline-block;background:${color}15;border:1px solid ${color}40;color:${color};font-family:'Inter',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;padding:6px 14px;border-radius:20px;margin-bottom:20px;font-weight:700">${headline}</div>
-      <h2 style="font-size:24px;font-weight:700;margin:0 0 12px;color:#ffffff">Hi ${name},</h2>
+      <h2 style="font-size:24px;font-weight:700;margin:0 0 12px;color:#ffffff">Hi ${esc(name)},</h2>
       <p style="color:#C8C5CB;font-size:15px;margin:0 0 32px;line-height:1.6">${body}</p>
       
       <div style="border-top:1px solid #1F1F27;padding-top:24px;margin-top:24px">
@@ -198,7 +209,7 @@ export class MailService {
   async sendOtp(to: string, name: string, otp: string): Promise<void> {
     const content = `
       <h2 style="font-size:24px;font-weight:700;margin:0 0 12px;color:#ffffff">Password Reset Code</h2>
-      <p style="color:#929095;font-size:15px;margin:0 0 32px;line-height:1.6">Hi ${name}, use the secure code below to reset your password. It expires in <strong style="color:#E4E1EC">10 minutes</strong>.</p>
+      <p style="color:#929095;font-size:15px;margin:0 0 32px;line-height:1.6">Hi ${esc(name)}, use the secure code below to reset your password. It expires in <strong style="color:#E4E1EC">10 minutes</strong>.</p>
       
       <div style="background:linear-gradient(180deg, #1B1B23 0%, #13131A 100%);border:1px solid #2D2D38;border-radius:16px;padding:32px;text-align:center;margin-bottom:32px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.05)">
         <span style="font-family:'SF Mono', Monaco, monospace;font-size:42px;font-weight:700;letter-spacing:0.3em;color:#3CD7FF;text-shadow:0 0 20px rgba(60,215,255,0.4)">${otp}</span>
@@ -223,9 +234,9 @@ export class MailService {
 
   async sendDirectMessage(to: string, name: string, subject: string, message: string): Promise<void> {
     const content = `
-      <h2 style="font-size:24px;font-weight:700;margin:0 0 16px;color:#ffffff">Hi ${name},</h2>
+      <h2 style="font-size:24px;font-weight:700;margin:0 0 16px;color:#ffffff">Hi ${esc(name)},</h2>
       <div style="background:#1B1B23;border:1px solid #2D2D38;border-radius:16px;padding:32px;margin:32px 0;box-shadow:inset 0 1px 0 rgba(255,255,255,0.05)">
-        <p style="margin:0;font-size:15px;line-height:1.7;white-space:pre-wrap;color:#C8C5CB">${message}</p>
+        <p style="margin:0;font-size:15px;line-height:1.7;white-space:pre-wrap;color:#C8C5CB">${esc(message)}</p>
       </div>
       <p style="color:#929095;font-size:14px;margin:0;line-height:1.6">If you have any questions or need further assistance, simply reply directly to this email.<br><br>Best regards,<br><strong style="color:#E4E1EC">The SonicRise Team</strong></p>
     `;

@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { User, Booking, Payment, Portfolio } from './entities';
 import { Role } from './enums';
 
@@ -13,11 +14,17 @@ const dataSource = new DataSource({
 });
 
 const SEED_ADMINS = [
-  { name: 'Admin User',       email: 'admin@sonicrise.rw', password: 'sonicrise2024' },
-  { name: 'Jean-Luc Amahoro', email: 'jl@sonicrise.rw',    password: 'sonicrise2024' },
-  { name: 'Marie Uwase',      email: 'marie@sonicrise.rw', password: 'sonicrise2024' },
-  { name: 'Samuel Niyonzima', email: 'sam@sonicrise.rw',   password: 'sonicrise2024' },
+  { name: 'Admin User',       email: 'admin@sonicrise.rw' },
+  { name: 'Jean-Luc Amahoro', email: 'jl@sonicrise.rw'    },
+  { name: 'Marie Uwase',      email: 'marie@sonicrise.rw' },
+  { name: 'Samuel Niyonzima', email: 'sam@sonicrise.rw'   },
 ];
+
+/**
+ * Uses SEED_ADMIN_PASSWORD when set; otherwise each new account gets a random
+ * password that is printed once below. Nothing is hardcoded in the repo.
+ */
+const sharedPassword = process.env.SEED_ADMIN_PASSWORD;
 
 async function seed() {
   await dataSource.initialize();
@@ -29,9 +36,10 @@ async function seed() {
       console.log(`  skip  ${admin.email} (already exists)`);
       continue;
     }
-    const passwordHash = await bcrypt.hash(admin.password, 12);
+    const password = sharedPassword ?? randomBytes(12).toString('base64url');
+    const passwordHash = await bcrypt.hash(password, 12);
     await repo.save(repo.create({ ...admin, passwordHash, role: Role.SUPERADMIN, isActive: true }));
-    console.log(`  added ${admin.email}`);
+    console.log(`  added ${admin.email}${sharedPassword ? '' : `  password: ${password}`}`);
   }
 
   await dataSource.destroy();

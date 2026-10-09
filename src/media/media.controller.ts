@@ -40,10 +40,9 @@ export class MediaController {
   @ApiOperation({ summary: 'Upload a media file to MinIO (admin only)' })
   async upload(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('No file attached');
-    // Note: for some raw files like .aiff MIME types can be tricky. We allow some flexibility here.
-    if (!ALLOWED_MIME.includes(file.mimetype) && !file.originalname.endsWith('.zip')) {
-       // Just a simple check, actual implementation might need a broader list of acceptable mimetypes
-       // throw new BadRequestException(`File type not allowed: ${file.mimetype}`);
+    // .zip archives are allowed regardless of the MIME type the browser reports.
+    if (!ALLOWED_MIME.includes(file.mimetype) && !file.originalname.toLowerCase().endsWith('.zip')) {
+      throw new BadRequestException(`File type not allowed: ${file.mimetype}`);
     }
     const url = await this.storageService.upload(file.buffer, file.originalname, file.mimetype);
     
