@@ -6,13 +6,28 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { User } from '../database/entities';
+import { Booking, User } from '../database/entities';
 import { Role } from '../database/enums';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { randomUUID } from 'crypto';
 
 import { MailService } from '../mail/mail.service';
+
+type ClientWithBookings = Omit<User, 'bookings'> & { bookings: Booking[] };
+
+/**
+ * User.bookings is a lazy relation (a Promise), which JSON serialisation
+ * drops. Resolve it into a plain array so the admin UI receives the bookings.
+ */
+async function withBookings(client: User): Promise<ClientWithBookings> {
+  const bookings = await client.bookings;
+  // Drop TypeORM's internal lazy-relation fields (__bookings__, __has_bookings__)
+  const fields = Object.fromEntries(
+    Object.entries(client).filter(([key]) => !key.startsWith('__')),
+  ) as Omit<User, 'bookings'>;
+  return { ...fields, bookings };
+}
 
 @Injectable()
 export class ClientsService {
@@ -41,21 +56,20 @@ export class ClientsService {
     return this.userRepo.save(client);
   }
 
-  findAll(): Promise<User[]> {
-    return this.userRepo.find({
+  async findAll(): Promise<ClientWithBookings[]> {
+    const clients = await this.userRepo.find({
       where: { role: Role.CLIENT, isActive: true },
-      relations: { bookings: true },
       order: { createdAt: 'DESC' },
     });
+    return Promise.all(clients.map(withBookings));
   }
 
-  async findOne(id: string): Promise<User & { bookings: unknown }> {
+  async findOne(id: string): Promise<ClientWithBookings> {
     const client = await this.userRepo.findOne({
       where: { id, role: Role.CLIENT },
-      relations: { bookings: true },
     });
     if (!client) throw new NotFoundException(`Client ${id} not found`);
-    return client;
+    return withBookings(client);
   }
 
   async update(id: string, dto: UpdateClientDto): Promise<User> {

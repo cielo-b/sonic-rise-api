@@ -19,11 +19,11 @@ export class CreatePortfolioDto {
   category: string;
 
   @ApiProperty({ example: 'https://cdn.sonicrise.rw/portfolio/echoes.mp4' })
-  @IsUrl()
+  @IsUrl({ require_tld: false })
   mediaUrl: string;
 
   @ApiProperty({ required: false })
-  @IsUrl()
+  @IsUrl({ require_tld: false })
   @IsOptional()
   thumbnailUrl?: string;
 

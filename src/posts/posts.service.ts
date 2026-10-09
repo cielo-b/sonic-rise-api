@@ -76,7 +76,7 @@ export class PostsService {
   }
 
   async findBySlug(slug: string): Promise<Post> {
-    const post = await this.repo.findOne({ where: { slug } });
+    const post = await this.repo.findOne({ where: { slug, published: true } });
     if (!post) throw new NotFoundException(`Post "${slug}" not found`);
     return post;
   }

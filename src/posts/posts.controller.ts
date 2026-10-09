@@ -6,17 +6,11 @@ import {
   Delete,
   Param,
   Body,
-  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiBearerAuth,
-  ApiOperation,
-  ApiQuery,
-} from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PostsService, CreatePostDto, UpdatePostDto } from './posts.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -29,15 +23,22 @@ export class PostsController {
   constructor(private readonly svc: PostsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List posts (public: published only; admin: all)' })
-  @ApiQuery({ name: 'all', required: false, type: Boolean })
-  findAll(@Query('all') all?: string) {
-    const adminMode = all === 'true';
-    return this.svc.findAll(!adminMode);
+  @ApiOperation({ summary: 'List published posts (public)' })
+  findAll() {
+    return this.svc.findAll(true);
+  }
+
+  @Get('admin/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPERADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List all posts including drafts (admin only)' })
+  findAllForAdmin() {
+    return this.svc.findAll(false);
   }
 
   @Get(':slug')
-  @ApiOperation({ summary: 'Get post by slug (public)' })
+  @ApiOperation({ summary: 'Get a published post by slug (public)' })
   findOne(@Param('slug') slug: string) {
     return this.svc.findBySlug(slug);
   }

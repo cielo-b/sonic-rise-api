@@ -31,7 +31,7 @@ export class UpdateUserDto {
   phone?: string;
 
   @ApiProperty({ required: false })
-  @IsUrl()
+  @IsUrl({ require_tld: false })
   @IsOptional()
   avatarUrl?: string;
 
