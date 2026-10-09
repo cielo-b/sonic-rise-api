@@ -1,38 +1,91 @@
-import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
-import { CreatePaymentDto } from './dto/create-payment.dto';
+import { InitiatePaymentDto, ListPaymentsQuery, RecordPaymentDto } from './dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from '../common/guards/permissions.guard';
+import { Permission } from '../common/permissions';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Role } from '../database/enums';
-
-interface AuthUser {
-  id: string;
-  role: Role;
-}
+import { StudioId } from '../common/decorators/studio.decorator';
+import type { User } from '../database/entities';
 
 @ApiTags('Payments')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('payments')
 export class PaymentsController {
-  constructor(private paymentsService: PaymentsService) {}
+  constructor(private readonly svc: PaymentsService) {}
 
-  @Post()
-  @ApiOperation({ summary: 'Initiate a payment for a booking' })
-  initiate(@CurrentUser() user: AuthUser, @Body() dto: CreatePaymentDto) {
-    return this.paymentsService.initiate(user.id, dto);
+  @Post('mobile-money')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Start a mobile money payment (customer approves on their phone)',
+  })
+  initiate(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Body() dto: InitiatePaymentDto,
+  ) {
+    return this.svc.initiate(studioId, user, dto);
+  }
+
+  /** Set this URL as the deposit callback in the pawaPay dashboard. */
+  @Post('pawapay/callback')
+  @HttpCode(HttpStatus.OK)
+  @SkipThrottle()
+  @ApiOperation({ summary: 'pawaPay deposit callback' })
+  callback(@Body() body: { depositId?: string }) {
+    return this.svc.handleCallback(body);
+  }
+
+  @Post('manual')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.FINANCE_WRITE)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Record a cash, bank or card payment taken at the studio',
+  })
+  record(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Body() dto: RecordPaymentDto,
+  ) {
+    return this.svc.record(studioId, user, dto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List payments' })
-  findAll(@CurrentUser() user: AuthUser) {
-    return this.paymentsService.findAll(user.id, user.role);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  list(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Query() q: ListPaymentsQuery,
+  ) {
+    return this.svc.list(studioId, user, q);
   }
 
-  @Get('booking/:bookingId')
-  @ApiOperation({ summary: 'Get payments for a specific booking' })
-  findByBooking(@Param('bookingId') bookingId: string) {
-    return this.paymentsService.findByBooking(bookingId);
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  status(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.status(studioId, id, user);
   }
 }
