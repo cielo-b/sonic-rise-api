@@ -72,7 +72,7 @@ export class MailService {
     `;
   }
 
-  async sendInvite(to: string, inviteToken: string): Promise<void> {
+  async sendInvite(to: string, inviteToken: string): Promise<string> {
     const frontendUrl = this.config.get<string>(
       'FRONTEND_URL',
       'http://localhost:3000',
@@ -99,6 +99,7 @@ export class MailService {
         ),
       });
       this.log.log(`Invite email sent to ${to}`);
+      return link;
     } catch (err) {
       this.log.error(`Failed to send invite to ${to}`, err);
       throw err;

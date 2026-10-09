@@ -270,7 +270,7 @@ export class AuthService {
   }
 
   // ─── Invite flow ─────────────────────────────────────────────────────────────
-  async sendInvite(email: string, role?: Role): Promise<void> {
+  async sendInvite(email: string, role?: Role): Promise<{ inviteUrl: string }> {
     const existing = await this.userRepo
       .createQueryBuilder('u')
       .where('LOWER(u.email) = LOWER(:email)', { email: email.trim() })
@@ -290,7 +290,8 @@ export class AuthService {
       inviteExpiry,
     });
     await this.userRepo.save(placeholder);
-    await this.mail.sendInvite(email, inviteToken);
+    const inviteUrl = await this.mail.sendInvite(email, inviteToken);
+    return { inviteUrl };
   }
 
   async acceptInvite(

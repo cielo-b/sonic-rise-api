@@ -2,11 +2,13 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../database/entities';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateMeDto } from './dto/update-me.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
@@ -65,6 +67,27 @@ export class UsersService {
     }
 
     return this.findOne(id);
+  }
+
+  /** Self-service update: re-checks the current password before credential changes. */
+  async updateMe(id: string, dto: UpdateMeDto): Promise<User> {
+    const { currentPassword, ...changes } = dto;
+    const user = await this.findOne(id);
+    if (changes.password || (changes.email && changes.email !== user.email)) {
+      const withHash = await this.userRepo
+        .createQueryBuilder('u')
+        .addSelect('u.passwordHash')
+        .where('u.id = :id', { id })
+        .getOne();
+      const valid =
+        !!currentPassword &&
+        !!withHash &&
+        (await bcrypt.compare(currentPassword, withHash.passwordHash));
+      if (!valid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+    }
+    return this.update(id, changes);
   }
 
   async deactivate(id: string): Promise<User> {

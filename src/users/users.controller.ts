@@ -10,6 +10,7 @@ import {
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateMeDto } from './dto/update-me.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -45,8 +46,8 @@ export class UsersController {
 
   @Patch('me')
   @ApiOperation({ summary: 'Update own profile' })
-  updateMe(@CurrentUser() user: { id: string }, @Body() dto: UpdateUserDto) {
-    return this.usersService.update(user.id, dto);
+  updateMe(@CurrentUser() user: { id: string }, @Body() dto: UpdateMeDto) {
+    return this.usersService.updateMe(user.id, dto);
   }
 
   @Patch(':id')

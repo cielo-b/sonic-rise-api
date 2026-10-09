@@ -21,6 +21,9 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { InviteDto } from './dto/invite.dto';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { Role } from '../database/enums';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { IsString } from 'class-validator';
 
@@ -88,7 +91,8 @@ export class AuthController {
 
   @Post('invite')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.SUPERADMIN)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Send an invitation email (admin only)' })
   sendInvite(@Body() dto: InviteDto) {
