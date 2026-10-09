@@ -13,12 +13,16 @@ import {
  * content can be managed independently of client records.
  */
 @Entity('portfolio')
+@Index(['studioId', 'isFeatured', 'sortOrder'])
 @Index(['category'])
 @Index(['sortOrder'])
 @Index(['isFeatured', 'sortOrder']) // homepage featured-grid query
 export class Portfolio {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'uuid' })
+  studioId: string;
 
   @Column({ type: 'varchar', length: 255 })
   title: string;

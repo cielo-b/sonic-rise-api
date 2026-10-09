@@ -4,42 +4,36 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
+/** The studio's asset library (website images, reels, raw footage…), organised in folders. */
 @Entity('media')
+@Index(['studioId', 'parentId'])
+@Index(['studioId', 'isTrash'])
 export class Media {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'uuid' })
+  studioId: string;
+
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
-  @Column({ type: 'varchar', length: 50 })
-  type: string; // 'video' | 'audio' | 'image'
+  /** image | video | audio | folder */
+  @Column({ type: 'varchar', length: 20 })
+  type: string;
 
-  @Column({ type: 'varchar', length: 50 })
-  badge: string;
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  mimeType: string | null;
 
-  @Column({ type: 'varchar', length: 50 })
-  badgeColor: string;
-
-  @Column({ type: 'varchar', length: 50 })
-  size: string;
-
-  @Column({ type: 'varchar', length: 50, nullable: true })
-  duration: string | null;
-
-  @Column({ type: 'varchar', length: 50 })
-  status: string;
-
-  @Column({ type: 'varchar', length: 255 })
-  statusColor: string;
+  /** Human-readable, e.g. "12.4 MB". */
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  size: string | null;
 
   @Column({ type: 'varchar', nullable: true })
-  src: string | null;
-
-  @Column({ type: 'varchar', length: 50, nullable: true })
-  resolution: string | null;
+  url: string | null;
 
   @Column({ type: 'text', array: true, default: [] })
   tags: string[];
@@ -56,12 +50,12 @@ export class Media {
   @Column({ type: 'boolean', default: false })
   isTrash: boolean;
 
+  @Column({ type: 'uuid', nullable: true })
+  uploadedById: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
-
-  @Column({ type: 'uuid', nullable: true })
-  clientId: string | null;
 }

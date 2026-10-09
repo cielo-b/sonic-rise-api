@@ -8,16 +8,20 @@ import {
 } from 'typeorm';
 
 @Entity('posts')
+@Index(['studioId', 'slug'], { unique: true })
+@Index(['studioId', 'published', 'createdAt'])
 @Index(['published', 'createdAt'])
 export class Post {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'uuid' })
+  studioId: string;
+
   @Column({ type: 'varchar', length: 255 })
   title: string;
 
-  @Column({ type: 'varchar', length: 255, unique: true })
-  @Index()
+  @Column({ type: 'varchar', length: 255 })
   slug: string;
 
   @Column({ type: 'varchar', length: 100 })
@@ -32,7 +36,7 @@ export class Post {
   @Column({ type: 'varchar', nullable: true })
   coverUrl: string | null;
 
-  @Column({ type: 'varchar', length: 20, default: '5 min' })
+  @Column({ type: 'varchar', length: 20 })
   readTime: string;
 
   @Column({ type: 'boolean', default: false })

@@ -9,13 +9,13 @@
  */
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
-import { User, Booking, Payment, Portfolio } from './entities';
+import { ALL_ENTITIES } from './entities';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   synchronize: false,
   logging: ['error', 'warn'],
-  entities: [User, Booking, Payment, Portfolio],
+  entities: ALL_ENTITIES,
   migrations: ['src/database/migrations/*.ts'],
 });
