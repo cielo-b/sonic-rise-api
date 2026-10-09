@@ -10,8 +10,9 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { IsString } from 'class-validator';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -21,11 +22,17 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { InviteDto } from './dto/invite.dto';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { Role } from '../database/enums';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from '../common/guards/permissions.guard';
+import { Permission } from '../common/permissions';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { IsString } from 'class-validator';
+import {
+  RequestStudioId,
+  StudioId,
+} from '../common/decorators/studio.decorator';
+import type { User } from '../database/entities';
 
 class Verify2FADto {
   @IsString() code: string;
@@ -35,28 +42,47 @@ class Login2FADto {
   @IsString() code: string;
 }
 
+type Req = { ip: string; headers: Record<string, string> };
+
+/** Brute-force protection on credential endpoints: 10 attempts per minute per IP. */
+const AUTH_LIMIT = { default: { limit: 10, ttl: 60_000 } };
+
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('register')
-  @ApiOperation({ summary: 'Create a new client account' })
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  @Throttle(AUTH_LIMIT)
+  @ApiOperation({ summary: 'Create a client account in this studio' })
+  register(
+    @StudioId() studioId: string,
+    @Body() dto: RegisterDto,
+    @Request() req: Req,
+  ) {
+    return this.authService.register(
+      studioId,
+      dto,
+      req.ip,
+      req.headers['user-agent'],
+    );
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard('local'))
-  @ApiOperation({ summary: 'Authenticate and receive JWT' })
+  @Throttle(AUTH_LIMIT)
+  @ApiOperation({
+    summary: 'Sign in (studio account, or platform admin when no studio)',
+  })
   login(
-    @Body() _dto: LoginDto,
-    @Request()
-    req: { user: { id: string }; ip: string; headers: Record<string, string> },
+    @RequestStudioId() studioId: string | null,
+    @Body() dto: LoginDto,
+    @Request() req: Req,
   ) {
     return this.authService.login(
-      req.user.id,
+      studioId,
+      dto.email,
+      dto.password,
       req.ip,
       req.headers['user-agent'],
     );
@@ -64,11 +90,9 @@ export class AuthController {
 
   @Post('login/2fa')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Complete login with 2FA code' })
-  loginWith2FA(
-    @Body() dto: Login2FADto,
-    @Request() req: { ip: string; headers: Record<string, string> },
-  ) {
+  @Throttle(AUTH_LIMIT)
+  @ApiOperation({ summary: 'Complete sign-in with an authenticator code' })
+  loginWith2FA(@Body() dto: Login2FADto, @Request() req: Req) {
     return this.authService.loginWith2FA(
       dto.tempToken,
       dto.code,
@@ -81,58 +105,69 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Refresh JWT token' })
-  refresh(
-    @CurrentUser() user: { id: string; email: string; role: string },
-    @Request() req: { ip: string; headers: Record<string, string> },
-  ) {
-    return this.authService.login(user.id, req.ip, req.headers['user-agent']);
+  refresh(@CurrentUser() user: User, @Request() req: Req) {
+    return this.authService.refresh(user, req.ip, req.headers['user-agent']);
   }
 
   @Post('invite')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(Permission.STAFF_MANAGE)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Send an invitation email (admin only)' })
-  sendInvite(@Body() dto: InviteDto) {
-    return this.authService.sendInvite(dto.email, dto.role);
+  @ApiOperation({ summary: 'Invite a team member' })
+  sendInvite(
+    @StudioId() studioId: string,
+    @CurrentUser() user: User,
+    @Body() dto: InviteDto,
+  ) {
+    return this.authService.sendInvite(studioId, user, dto);
+  }
+
+  @Get('invite/:token')
+  @ApiOperation({ summary: 'Who an invitation is for' })
+  describeInvite(@Param('token') token: string) {
+    return this.authService.describeInvite(token);
   }
 
   @Post('accept-invite')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Accept invitation and activate account' })
+  @Throttle(AUTH_LIMIT)
   acceptInvite(@Body() dto: AcceptInviteDto) {
     return this.authService.acceptInvite(dto.token, dto.name, dto.password);
   }
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Send 6-digit OTP to email for password reset' })
-  forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto.email);
+  @Throttle(AUTH_LIMIT)
+  forgotPassword(
+    @RequestStudioId() studioId: string | null,
+    @Body() dto: ForgotPasswordDto,
+  ) {
+    return this.authService.forgotPassword(studioId, dto.email);
   }
 
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify OTP and receive a reset token' })
-  verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyOtp(dto.email, dto.otp);
+  @Throttle(AUTH_LIMIT)
+  verifyOtp(
+    @RequestStudioId() studioId: string | null,
+    @Body() dto: VerifyOtpDto,
+  ) {
+    return this.authService.verifyOtp(studioId, dto.email, dto.otp);
   }
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Set new password using reset token' })
+  @Throttle(AUTH_LIMIT)
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.resetToken, dto.password);
   }
 
-  // ─── 2FA endpoints ───────────────────────────────────────────────────────────
+  // ─── 2FA ────────────────────────────────────────────────────────────────────
   @Post('2fa/setup')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Generate 2FA secret and QR code' })
-  setup2FA(@CurrentUser() user: { id: string }) {
+  setup2FA(@CurrentUser() user: User) {
     return this.authService.generate2FASecret(user.id);
   }
 
@@ -140,8 +175,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Enable 2FA after verifying TOTP code' })
-  enable2FA(@CurrentUser() user: { id: string }, @Body() dto: Verify2FADto) {
+  enable2FA(@CurrentUser() user: User, @Body() dto: Verify2FADto) {
     return this.authService.enable2FA(user.id, dto.code);
   }
 
@@ -149,17 +183,15 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Disable 2FA' })
-  disable2FA(@CurrentUser() user: { id: string }, @Body() dto: Verify2FADto) {
+  disable2FA(@CurrentUser() user: User, @Body() dto: Verify2FADto) {
     return this.authService.disable2FA(user.id, dto.code);
   }
 
-  // ─── Sessions endpoints ───────────────────────────────────────────────────────
+  // ─── Sessions ───────────────────────────────────────────────────────────────
   @Get('sessions')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List active sessions' })
-  getSessions(@CurrentUser() user: { id: string }) {
+  getSessions(@CurrentUser() user: User) {
     return this.authService.getActiveSessions(user.id);
   }
 
@@ -167,11 +199,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Revoke a specific session' })
-  revokeSession(
-    @CurrentUser() user: { id: string },
-    @Param('id') sessionId: string,
-  ) {
+  revokeSession(@CurrentUser() user: User, @Param('id') sessionId: string) {
     return this.authService.revokeSession(user.id, sessionId);
   }
 
@@ -179,17 +207,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Revoke all sessions (sign out everywhere)' })
-  revokeAllSessions(@CurrentUser() user: { id: string }) {
+  revokeAllSessions(@CurrentUser() user: User) {
     return this.authService.revokeAllSessions(user.id);
   }
 
-  // ─── Login history ────────────────────────────────────────────────────────────
   @Get('login-history')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get login history for current user' })
-  getLoginHistory(@CurrentUser() user: { id: string }) {
+  getLoginHistory(@CurrentUser() user: User) {
     return this.authService.getLoginHistory(user.id);
   }
 }

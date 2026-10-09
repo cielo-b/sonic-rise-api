@@ -1,14 +1,32 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsOptional } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { Role } from '../../database/enums';
 
 export class InviteDto {
-  @ApiProperty({ example: 'newstaff@sonicrise.rw' })
+  @ApiProperty({ example: 'newstaff@example.com' })
   @IsEmail()
   email: string;
 
-  @ApiProperty({ enum: Role, required: false })
-  @IsEnum(Role)
+  @ApiProperty({ required: false })
+  @IsString()
   @IsOptional()
-  role?: Role;
+  name?: string;
+
+  @ApiProperty({
+    enum: [Role.OWNER, Role.MANAGER, Role.ENGINEER, Role.FRONT_DESK],
+  })
+  @IsIn([Role.OWNER, Role.MANAGER, Role.ENGINEER, Role.FRONT_DESK])
+  role: Role;
+
+  /** Can be assigned to sessions. Defaults to true for engineers. */
+  @ApiProperty({ required: false })
+  @IsBoolean()
+  @IsOptional()
+  isBookable?: boolean;
 }
