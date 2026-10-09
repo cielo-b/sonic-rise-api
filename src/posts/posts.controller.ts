@@ -1,21 +1,25 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
   Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
   UseGuards,
-  HttpCode,
-  HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { PostsService, CreatePostDto, UpdatePostDto } from './posts.service';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CreatePostDto, PostsService, UpdatePostDto } from './posts.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
-import { Role } from '../database/enums';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from '../common/guards/permissions.guard';
+import { Permission } from '../common/permissions';
+import { StudioId } from '../common/decorators/studio.decorator';
+
+const Write = () => RequirePermissions(Permission.CONTENT_WRITE);
 
 @ApiTags('Posts')
 @Controller('posts')
@@ -23,51 +27,50 @@ export class PostsController {
   constructor(private readonly svc: PostsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List published posts (public)' })
-  findAll() {
-    return this.svc.findAll(true);
+  @ApiOperation({ summary: 'Published posts (public)' })
+  findAll(@StudioId() s: string) {
+    return this.svc.findAll(s, true);
   }
 
   @Get('admin/all')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Write()
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List all posts including drafts (admin only)' })
-  findAllForAdmin() {
-    return this.svc.findAll(false);
+  @ApiOperation({ summary: 'All posts including drafts' })
+  findAllForAdmin(@StudioId() s: string) {
+    return this.svc.findAll(s, false);
   }
 
   @Get(':slug')
-  @ApiOperation({ summary: 'Get a published post by slug (public)' })
-  findOne(@Param('slug') slug: string) {
-    return this.svc.findBySlug(slug);
+  findOne(@StudioId() s: string, @Param('slug') slug: string) {
+    return this.svc.findBySlug(s, slug);
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Write()
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a post (admin only)' })
-  create(@Body() dto: CreatePostDto) {
-    return this.svc.create(dto);
+  create(@StudioId() s: string, @Body() dto: CreatePostDto) {
+    return this.svc.create(s, dto);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Write()
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update a post (admin only)' })
-  update(@Param('id') id: string, @Body() dto: UpdatePostDto) {
-    return this.svc.update(id, dto);
+  update(
+    @StudioId() s: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePostDto,
+  ) {
+    return this.svc.update(s, id, dto);
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Write()
   @ApiBearerAuth()
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete a post (admin only)' })
-  remove(@Param('id') id: string) {
-    return this.svc.remove(id);
+  remove(@StudioId() s: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.remove(s, id);
   }
 }

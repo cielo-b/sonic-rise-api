@@ -1,145 +1,67 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
   Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
   UseGuards,
-  UploadedFile,
-  UseInterceptors,
-  BadRequestException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  ApiTags,
-  ApiBearerAuth,
-  ApiOperation,
-  ApiConsumes,
-} from '@nestjs/swagger';
-import * as multer from 'multer';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { MediaService } from './media.service';
 import { CreateMediaDto } from './dto/create-media.dto';
 import { UpdateMediaDto } from './dto/update-media.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from '../common/guards/permissions.guard';
+import { Permission } from '../common/permissions';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Role } from '../database/enums';
-import { StorageService } from '../storage/storage.service';
+import { StudioId } from '../common/decorators/studio.decorator';
+import type { User } from '../database/entities';
 
-const ALLOWED_MIME = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'video/mp4',
-  'video/quicktime',
-  'audio/mpeg',
-  'audio/wav',
-  'audio/x-wav',
-  'audio/aiff',
-  'audio/x-aiff',
-];
-const MAX_SIZE = 500 * 1024 * 1024; // 500 MB to accommodate raw assets
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
-}
-
+/** Upload files with POST /uploads, then register them here. */
 @ApiTags('Media')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions(Permission.CONTENT_WRITE)
 @Controller('media')
 export class MediaController {
-  constructor(
-    private readonly mediaService: MediaService,
-    private readonly storageService: StorageService,
-  ) {}
-
-  @Post('upload')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
-  @ApiBearerAuth()
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: multer.memoryStorage(),
-      limits: { fileSize: MAX_SIZE },
-    }),
-  )
-  @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload a media file to MinIO (admin only)' })
-  async upload(@UploadedFile() file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('No file attached');
-    // .zip archives are allowed regardless of the MIME type the browser reports.
-    if (
-      !ALLOWED_MIME.includes(file.mimetype) &&
-      !file.originalname.toLowerCase().endsWith('.zip')
-    ) {
-      throw new BadRequestException(`File type not allowed: ${file.mimetype}`);
-    }
-    const url = await this.storageService.upload(
-      file.buffer,
-      file.originalname,
-      file.mimetype,
-    );
-
-    // Automatically infer type from mimetype
-    let type = 'image';
-    if (file.mimetype.startsWith('video/')) type = 'video';
-    if (file.mimetype.startsWith('audio/')) type = 'audio';
-
-    return {
-      url,
-      type,
-      size: formatSize(file.size),
-      name: file.originalname,
-    };
-  }
+  constructor(private readonly svc: MediaService) {}
 
   @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN, Role.CLIENT)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get all media assets' })
-  findAll(@CurrentUser() user: any) {
-    return this.mediaService.findAll(user);
+  findAll(@StudioId() s: string) {
+    return this.svc.findAll(s);
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN, Role.CLIENT)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get a single media asset' })
-  findOne(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.mediaService.findOne(id, user);
+  findOne(@StudioId() s: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.findOne(s, id);
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a media asset (admin only)' })
-  create(@Body() dto: CreateMediaDto) {
-    return this.mediaService.create(dto);
+  create(
+    @StudioId() s: string,
+    @CurrentUser() u: User,
+    @Body() dto: CreateMediaDto,
+  ) {
+    return this.svc.create(s, u.id, dto);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update a media asset (admin only)' })
-  update(@Param('id') id: string, @Body() dto: UpdateMediaDto) {
-    return this.mediaService.update(id, dto);
+  update(
+    @StudioId() s: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateMediaDto,
+  ) {
+    return this.svc.update(s, id, dto);
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Delete a media asset (admin only)' })
-  remove(@Param('id') id: string) {
-    return this.mediaService.remove(id);
+  remove(@StudioId() s: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.remove(s, id);
   }
 }

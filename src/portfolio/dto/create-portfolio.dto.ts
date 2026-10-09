@@ -19,11 +19,19 @@ export class CreatePortfolioDto {
   category: string;
 
   @ApiProperty({ example: 'https://cdn.sonicrise.rw/portfolio/echoes.mp4' })
-  @IsUrl({ require_tld: false })
+  @IsUrl({
+    require_tld: false,
+    protocols: ['http', 'https'],
+    require_protocol: true,
+  })
   mediaUrl: string;
 
   @ApiProperty({ required: false })
-  @IsUrl({ require_tld: false })
+  @IsUrl({
+    require_tld: false,
+    protocols: ['http', 'https'],
+    require_protocol: true,
+  })
   @IsOptional()
   thumbnailUrl?: string;
 

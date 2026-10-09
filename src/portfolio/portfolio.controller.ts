@@ -1,118 +1,73 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
   Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
   UseGuards,
-  UploadedFile,
-  UseInterceptors,
-  BadRequestException,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  ApiTags,
-  ApiBearerAuth,
-  ApiOperation,
-  ApiConsumes,
-} from '@nestjs/swagger';
-import * as multer from 'multer';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { PortfolioService } from './portfolio.service';
 import { CreatePortfolioDto } from './dto/create-portfolio.dto';
 import { UpdatePortfolioDto } from './dto/update-portfolio.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
-import { Role } from '../database/enums';
-import { StorageService } from '../storage/storage.service';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from '../common/guards/permissions.guard';
+import { Permission } from '../common/permissions';
+import { StudioId } from '../common/decorators/studio.decorator';
 
-const ALLOWED_MIME = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'video/mp4',
-  'video/quicktime',
-];
-const MAX_SIZE = 100 * 1024 * 1024; // 100 MB
+const Write = () => RequirePermissions(Permission.CONTENT_WRITE);
 
 @ApiTags('Portfolio')
 @Controller('portfolio')
 export class PortfolioController {
-  constructor(
-    private readonly portfolioService: PortfolioService,
-    private readonly storageService: StorageService,
-  ) {}
-
-  @Post('upload')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
-  @ApiBearerAuth()
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: multer.memoryStorage(),
-      limits: { fileSize: MAX_SIZE },
-    }),
-  )
-  @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload a media file to MinIO (admin only)' })
-  async upload(@UploadedFile() file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('No file attached');
-    if (!ALLOWED_MIME.includes(file.mimetype)) {
-      throw new BadRequestException(`File type not allowed: ${file.mimetype}`);
-    }
-    const url = await this.storageService.upload(
-      file.buffer,
-      file.originalname,
-      file.mimetype,
-    );
-    return { url };
-  }
+  constructor(private readonly svc: PortfolioService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all portfolio items (public)' })
-  findAll() {
-    return this.portfolioService.findAll();
+  findAll(@StudioId() s: string) {
+    return this.svc.findAll(s);
   }
 
   @Get('featured')
-  @ApiOperation({ summary: 'Get featured items for the homepage (public)' })
-  findFeatured() {
-    return this.portfolioService.findFeatured();
+  findFeatured(@StudioId() s: string) {
+    return this.svc.findFeatured(s);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a single portfolio item (public)' })
-  findOne(@Param('id') id: string) {
-    return this.portfolioService.findOne(id);
+  findOne(@StudioId() s: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.findOne(s, id);
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Write()
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a portfolio item (admin only)' })
-  create(@Body() dto: CreatePortfolioDto) {
-    return this.portfolioService.create(dto);
+  create(@StudioId() s: string, @Body() dto: CreatePortfolioDto) {
+    return this.svc.create(s, dto);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Write()
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update a portfolio item (admin only)' })
-  update(@Param('id') id: string, @Body() dto: UpdatePortfolioDto) {
-    return this.portfolioService.update(id, dto);
+  update(
+    @StudioId() s: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePortfolioDto,
+  ) {
+    return this.svc.update(s, id, dto);
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.SUPERADMIN)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Write()
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Delete a portfolio item (admin only)' })
-  remove(@Param('id') id: string) {
-    return this.portfolioService.remove(id);
+  remove(@StudioId() s: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.svc.remove(s, id);
   }
 }

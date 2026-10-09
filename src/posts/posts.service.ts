@@ -1,118 +1,133 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
-  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Matches,
+  MaxLength,
+} from 'class-validator';
+import { PartialType } from '@nestjs/swagger';
 import { Post } from './post.entity';
 
 function toSlug(title: string): string {
   return title
     .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 120);
 }
 
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+/** ~200 words per minute, at least 1 minute. */
+function readTime(content: string, excerpt: string): string {
+  const words = `${excerpt} ${content}`
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+  return `${Math.max(1, Math.round(words / 200))} min`;
+}
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
 export class CreatePostDto {
-  @IsString()
-  title: string;
-
-  @IsString()
-  category: string;
-
-  @IsString()
-  excerpt: string;
-
-  @IsString()
+  @IsString() @MaxLength(255) title: string;
+  @IsString() @MaxLength(100) category: string;
+  @IsString() @MaxLength(1000) excerpt: string;
+  @IsOptional() @IsString() @MaxLength(100000) content?: string;
   @IsOptional()
-  content?: string;
-
-  @IsString()
-  @IsOptional()
+  @IsUrl({
+    require_tld: false,
+    protocols: ['http', 'https'],
+    require_protocol: true,
+  })
   coverUrl?: string;
-
-  @IsString()
-  @IsOptional()
-  readTime?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  featured?: boolean;
-
-  @IsBoolean()
-  @IsOptional()
-  published?: boolean;
-
-  @IsString()
-  authorName: string;
-
-  @IsString()
-  @IsOptional()
-  authorInitials?: string;
-
-  @IsString()
-  @IsOptional()
-  slug?: string;
+  @IsOptional() @IsBoolean() featured?: boolean;
+  @IsOptional() @IsBoolean() published?: boolean;
+  @IsString() @MaxLength(255) authorName: string;
+  @IsOptional() @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/) slug?: string;
 }
-
-import { PartialType } from '@nestjs/swagger';
 export class UpdatePostDto extends PartialType(CreatePostDto) {}
 
 @Injectable()
 export class PostsService {
   constructor(
-    @InjectRepository(Post)
-    private readonly repo: Repository<Post>,
+    @InjectRepository(Post) private readonly repo: Repository<Post>,
   ) {}
 
-  findAll(publishedOnly = true): Promise<Post[]> {
+  findAll(studioId: string, publishedOnly: boolean) {
     return this.repo.find({
-      where: publishedOnly ? { published: true } : {},
+      where: { studioId, ...(publishedOnly ? { published: true } : {}) },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async findBySlug(slug: string): Promise<Post> {
-    const post = await this.repo.findOne({ where: { slug, published: true } });
-    if (!post) throw new NotFoundException(`Post "${slug}" not found`);
+  async findBySlug(studioId: string, slug: string) {
+    const post = await this.repo.findOne({
+      where: { studioId, slug, published: true },
+    });
+    if (!post) throw new NotFoundException('Post not found');
     return post;
   }
 
-  async create(dto: CreatePostDto): Promise<Post> {
-    const slug = dto.slug ?? toSlug(dto.title);
-    const exists = await this.repo.findOne({ where: { slug } });
-    if (exists) throw new ConflictException(`Slug "${slug}" already in use`);
-
-    const post = this.repo.create({
-      ...dto,
-      slug,
-      authorInitials:
-        dto.authorInitials ??
-        dto.authorName
-          .split(' ')
-          .map((n) => n[0])
-          .slice(0, 2)
-          .join('')
-          .toUpperCase(),
-      content: dto.content ?? '',
-      readTime: dto.readTime ?? '5 min',
+  private async uniqueSlug(
+    studioId: string,
+    wanted: string,
+    exceptId?: string,
+  ) {
+    const clash = await this.repo.findOne({
+      where: { studioId, slug: wanted },
     });
-    return this.repo.save(post);
+    if (clash && clash.id !== exceptId)
+      throw new ConflictException(
+        `The address "${wanted}" is already used by another post`,
+      );
+    return wanted;
   }
 
-  async update(id: string, dto: UpdatePostDto): Promise<Post> {
-    const post = await this.repo.findOne({ where: { id } });
-    if (!post) throw new NotFoundException(`Post ${id} not found`);
+  async create(studioId: string, dto: CreatePostDto) {
+    const slug = await this.uniqueSlug(studioId, dto.slug ?? toSlug(dto.title));
+    const content = dto.content ?? '';
+    return this.repo.save(
+      this.repo.create({
+        ...dto,
+        studioId,
+        slug,
+        content,
+        authorInitials: initials(dto.authorName),
+        readTime: readTime(content, dto.excerpt),
+      }),
+    );
+  }
+
+  async update(studioId: string, id: string, dto: UpdatePostDto) {
+    const post = await this.repo.findOne({ where: { id, studioId } });
+    if (!post) throw new NotFoundException('Post not found');
+    if (dto.slug && dto.slug !== post.slug)
+      await this.uniqueSlug(studioId, dto.slug, id);
     Object.assign(post, dto);
+    if (dto.authorName) post.authorInitials = initials(dto.authorName);
+    post.readTime = readTime(post.content, post.excerpt);
     return this.repo.save(post);
   }
 
-  async remove(id: string): Promise<void> {
-    const post = await this.repo.findOne({ where: { id } });
-    if (!post) throw new NotFoundException(`Post ${id} not found`);
+  async remove(studioId: string, id: string) {
+    const post = await this.repo.findOne({ where: { id, studioId } });
+    if (!post) throw new NotFoundException('Post not found');
     await this.repo.remove(post);
   }
 }

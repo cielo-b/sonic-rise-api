@@ -8,42 +8,39 @@ import { UpdatePortfolioDto } from './dto/update-portfolio.dto';
 @Injectable()
 export class PortfolioService {
   constructor(
-    @InjectRepository(Portfolio)
-    private readonly portfolioRepo: Repository<Portfolio>,
+    @InjectRepository(Portfolio) private readonly repo: Repository<Portfolio>,
   ) {}
 
-  findAll(): Promise<Portfolio[]> {
-    return this.portfolioRepo.find({
+  findAll(studioId: string) {
+    return this.repo.find({
+      where: { studioId },
       order: { sortOrder: 'ASC', createdAt: 'DESC' },
     });
   }
 
-  findFeatured(): Promise<Portfolio[]> {
-    return this.portfolioRepo.find({
-      where: { isFeatured: true },
-      order: { sortOrder: 'ASC' },
+  findFeatured(studioId: string) {
+    return this.repo.find({
+      where: { studioId, isFeatured: true },
+      order: { sortOrder: 'ASC', createdAt: 'DESC' },
     });
   }
 
-  async findOne(id: string): Promise<Portfolio> {
-    const item = await this.portfolioRepo.findOne({ where: { id } });
-    if (!item) throw new NotFoundException(`Portfolio item ${id} not found`);
+  async findOne(studioId: string, id: string) {
+    const item = await this.repo.findOne({ where: { id, studioId } });
+    if (!item) throw new NotFoundException('Portfolio item not found');
     return item;
   }
 
-  async create(dto: CreatePortfolioDto): Promise<Portfolio> {
-    const item = this.portfolioRepo.create(dto);
-    return this.portfolioRepo.save(item);
+  create(studioId: string, dto: CreatePortfolioDto) {
+    return this.repo.save(this.repo.create({ ...dto, studioId }));
   }
 
-  async update(id: string, dto: UpdatePortfolioDto): Promise<Portfolio> {
-    const item = await this.findOne(id);
-    Object.assign(item, dto);
-    return this.portfolioRepo.save(item);
+  async update(studioId: string, id: string, dto: UpdatePortfolioDto) {
+    const item = await this.findOne(studioId, id);
+    return this.repo.save(Object.assign(item, dto));
   }
 
-  async remove(id: string): Promise<void> {
-    const item = await this.findOne(id);
-    await this.portfolioRepo.remove(item);
+  async remove(studioId: string, id: string) {
+    await this.repo.remove(await this.findOne(studioId, id));
   }
 }

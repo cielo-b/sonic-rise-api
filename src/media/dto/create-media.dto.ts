@@ -1,75 +1,55 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsArray, IsUrl } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUrl,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateMediaDto {
-  @ApiProperty()
+  @ApiProperty() @IsString() @MaxLength(255) name: string;
+  @ApiProperty({ enum: ['image', 'video', 'audio', 'folder'] })
+  @IsIn(['image', 'video', 'audio', 'folder'])
+  type: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsString()
-  name: string;
-
-  @ApiProperty()
+  @MaxLength(120)
+  mimeType?: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsString()
-  type: string; // 'video' | 'audio' | 'image'
-
-  @ApiProperty()
-  @IsString()
-  badge: string;
-
-  @ApiProperty()
-  @IsString()
-  badgeColor: string;
-
-  @ApiProperty()
-  @IsString()
-  size: string;
+  @MaxLength(30)
+  size?: string;
 
   @ApiProperty({ required: false })
-  @IsString()
   @IsOptional()
-  duration?: string;
+  @IsUrl({
+    require_tld: false,
+    protocols: ['http', 'https'],
+    require_protocol: true,
+  })
+  url?: string;
 
-  @ApiProperty()
-  @IsString()
-  status: string;
-
-  @ApiProperty()
-  @IsString()
-  statusColor: string;
-
-  @ApiProperty({ required: false })
-  @IsString()
+  @ApiProperty({ required: false, type: [String] })
   @IsOptional()
-  src?: string;
-
-  @ApiProperty({ required: false })
-  @IsString()
-  @IsOptional()
-  resolution?: string;
-
-  @ApiProperty({ type: [String], required: false })
   @IsArray()
+  @ArrayMaxSize(30)
   @IsString({ each: true })
-  @IsOptional()
+  @MaxLength(50, { each: true })
   tags?: string[];
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsBoolean()
   isFolder?: boolean;
-
-  @ApiProperty({ required: false })
-  @IsString()
+  @ApiProperty({ required: false, nullable: true })
   @IsOptional()
-  parentId?: string;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  isFavorite?: boolean;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  isTrash?: boolean;
-
-  @ApiProperty({ required: false })
-  @IsString()
-  @IsOptional()
-  clientId?: string;
+  @IsUUID()
+  parentId?: string | null;
 }
