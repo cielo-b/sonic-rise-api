@@ -5,62 +5,76 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  ManyToMany,
+  JoinTable,
   OneToMany,
   JoinColumn,
   Index,
 } from 'typeorm';
-import { BookingStatus, ServiceType } from '../enums';
+import { BookingSource, BookingStatus } from '../enums';
 import { User } from './user.entity';
 import { Payment } from './payment.entity';
+import { Room } from './room.entity';
+import { Equipment } from './equipment.entity';
+import { ServicePackage } from './service-package.entity';
+import { decimalTransformer } from './transformers';
 
-/** Reusable transformer: stores Decimal as numeric in PG, returns JS number. */
-const decimalTransformer = {
-  to: (v: number) => v,
-  from: (v: string) => (v === null ? null : parseFloat(v)),
-};
-
+/**
+ * One session: a package in a room, optionally with an engineer and gear,
+ * between startsAt and endsAt. Room, engineer and equipment can't overlap
+ * with another active booking (enforced in BookingsService).
+ */
 @Entity('bookings')
-@Index(['status'])
-@Index(['dateTime'])
-@Index(['serviceType'])
-@Index(['clientId', 'status']) // "my active bookings" client-dashboard query
+@Index(['studioId', 'startsAt'])
+@Index(['studioId', 'status'])
+@Index(['roomId', 'startsAt'])
+@Index(['engineerId', 'startsAt'])
+@Index(['clientId', 'status'])
 export class Booking {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  /** FK stored explicitly for direct queries without JOIN. */
+  @Column({ type: 'uuid' })
+  studioId: string;
+
   @Column({ type: 'uuid', nullable: true })
-  @Index()
   clientId: string | null;
 
+  /** Walk-in clients without an account (staff-created bookings only). */
   @Column({ type: 'varchar', nullable: true })
   guestName: string | null;
 
   @Column({ type: 'varchar', nullable: true })
   guestEmail: string | null;
 
-  @Column({ type: 'enum', enum: ServiceType })
-  serviceType: ServiceType;
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  guestPhone: string | null;
 
-  /** UTC timestamp of session start. */
+  @Column({ type: 'uuid' })
+  packageId: string;
+
+  @Column({ type: 'uuid' })
+  roomId: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  engineerId: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  projectId: string | null;
+
   @Column({ type: 'timestamptz' })
-  dateTime: Date;
+  startsAt: Date;
 
-  /**
-   * UTC timestamp of expected session end.
-   * Computed at booking time from serviceType duration and stored
-   * to keep calendar availability queries simple and fast.
-   */
-  @Column({ type: 'timestamptz', nullable: true })
-  endsAt: Date | null;
+  @Column({ type: 'timestamptz' })
+  endsAt: Date;
 
   @Column({ type: 'enum', enum: BookingStatus, default: BookingStatus.PENDING })
   status: BookingStatus;
 
-  /**
-   * Agreed total in `currency`. Using DECIMAL(12,2) to avoid IEEE-754
-   * floating-point errors on financial values.
-   */
+  @Column({ type: 'enum', enum: BookingSource, default: BookingSource.WEB })
+  source: BookingSource;
+
+  /** Computed server-side from the package, duration and equipment. */
   @Column({
     type: 'decimal',
     precision: 12,
@@ -69,16 +83,41 @@ export class Booking {
   })
   totalAmount: number;
 
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: decimalTransformer,
+  })
+  depositAmount: number;
+
+  /** Sum of successful payments for this booking. */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: decimalTransformer,
+  })
+  amountPaid: number;
+
   @Column({ type: 'varchar', length: 3, default: 'RWF' })
   currency: string;
 
-  /** Client-visible session notes supplied during booking. */
+  /** From the client. */
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
-  /** Internal staff notes — never exposed to the client API. */
+  /** Staff only. */
   @Column({ type: 'text', nullable: true })
   internalNotes: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  cancelledAt: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  cancelReason: string | null;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -94,6 +133,26 @@ export class Booking {
   @JoinColumn({ name: 'clientId' })
   client: User | null;
 
-  @OneToMany(() => Payment, (payment) => payment.booking, { lazy: true })
-  payments: Promise<Payment[]>;
+  @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'engineerId' })
+  engineer: User | null;
+
+  @ManyToOne(() => Room, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'roomId' })
+  room: Room;
+
+  @ManyToOne(() => ServicePackage, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'packageId' })
+  package: ServicePackage;
+
+  @ManyToMany(() => Equipment)
+  @JoinTable({
+    name: 'booking_equipment',
+    joinColumn: { name: 'bookingId' },
+    inverseJoinColumn: { name: 'equipmentId' },
+  })
+  equipment: Equipment[];
+
+  @OneToMany(() => Payment, (payment) => payment.booking)
+  payments: Payment[];
 }

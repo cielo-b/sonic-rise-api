@@ -8,25 +8,46 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { PaymentMethod, PaymentStatus } from '../enums';
+import {
+  PaymentMethod,
+  PaymentProvider,
+  PaymentPurpose,
+  PaymentStatus,
+} from '../enums';
 import { Booking } from './booking.entity';
+import { decimalTransformer } from './transformers';
 
-const decimalTransformer = {
-  to: (v: number) => v,
-  from: (v: string) => (v === null ? null : parseFloat(v)),
-};
-
+/**
+ * Money received for exactly one thing: a booking deposit/balance, an
+ * invoice, or a paid deliverable download.
+ */
 @Entity('payments')
-@Index(['status'])
-@Index(['paymentMethod'])
-@Index(['bookingId', 'status']) // "is this booking settled?" fast lookup
+@Index(['studioId', 'status', 'paidAt'])
+@Index(['bookingId', 'status'])
+@Index(['invoiceId', 'status'])
+@Index(['deliverableId', 'status'])
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'uuid' })
-  @Index()
-  bookingId: string;
+  studioId: string;
+
+  @Column({ type: 'enum', enum: PaymentPurpose })
+  purpose: PaymentPurpose;
+
+  @Column({ type: 'uuid', nullable: true })
+  bookingId: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  invoiceId: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  deliverableId: string | null;
+
+  /** Who paid (client). Null for walk-ins paid at the desk. */
+  @Column({ type: 'uuid', nullable: true })
+  payerId: string | null;
 
   @Column({
     type: 'decimal',
@@ -42,31 +63,35 @@ export class Payment {
   @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
   status: PaymentStatus;
 
-  @Column({ type: 'enum', enum: PaymentMethod })
-  paymentMethod: PaymentMethod;
+  @Column({ type: 'enum', enum: PaymentProvider })
+  provider: PaymentProvider;
 
-  /**
-   * Unique reference returned by the payment gateway (MoMo, Stripe, etc.).
-   * Enforced UNIQUE in the DB; null while the gateway has not yet responded.
-   */
+  @Column({ type: 'enum', enum: PaymentMethod })
+  method: PaymentMethod;
+
+  /** Mobile money number charged. */
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  phone: string | null;
+
+  /** Provider transaction id (pawaPay depositId). */
   @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
   transactionReference: string | null;
 
-  /**
-   * Raw JSON payload from the gateway, preserved verbatim for reconciliation
-   * and dispute resolution without re-calling the gateway API.
-   */
   @Column({ type: 'jsonb', nullable: true })
   gatewayResponse: Record<string, unknown> | null;
 
-  /** Set when status transitions to SUCCESS. Drives revenue time-series. */
   @Column({ type: 'timestamptz', nullable: true })
-  @Index()
   paidAt: Date | null;
 
-  /** Human-readable decline reason from the gateway on FAILED status. */
   @Column({ type: 'text', nullable: true })
   failureReason: string | null;
+
+  /** Staff member who recorded a manual payment. */
+  @Column({ type: 'uuid', nullable: true })
+  recordedById: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  note: string | null;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -74,11 +99,10 @@ export class Payment {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // ─── Relations ──────────────────────────────────────────────────────────────
   @ManyToOne(() => Booking, (booking) => booking.payments, {
     onDelete: 'RESTRICT',
-    nullable: false,
+    nullable: true,
   })
   @JoinColumn({ name: 'bookingId' })
-  booking: Booking;
+  booking: Booking | null;
 }
