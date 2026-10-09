@@ -102,8 +102,9 @@ export class StudiosService {
     if (!studio) throw new NotFoundException('Studio not found');
     const { content, openingHours, socials, ...fields } = dto;
     Object.assign(studio, fields);
-    // Nested objects are replaced as a whole so removed items really disappear.
-    if (content) studio.content = { ...studio.content, ...content };
+    // Nested objects are replaced as a whole (the editor sends everything) so
+    // cleared fields and removed items really disappear.
+    if (content) studio.content = content;
     if (openingHours) studio.openingHours = openingHours;
     if (socials) studio.socials = socials;
     await this.studios.save(studio);
