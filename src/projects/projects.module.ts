@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   Booking,
+  Contract,
   Deliverable,
   DeliverableComment,
   DeliverableVersion,
@@ -14,6 +15,7 @@ import { StorageModule } from '../storage/storage.module';
 import { MailModule } from '../mail/mail.module';
 import { ProjectsService } from './projects.service';
 import {
+  ContractsController,
   DeliverablesController,
   NotesController,
   ProjectsController,
@@ -30,11 +32,17 @@ import {
       Booking,
       User,
       Studio,
+      Contract,
     ]),
     StorageModule,
     MailModule,
   ],
-  controllers: [ProjectsController, NotesController, DeliverablesController],
+  controllers: [
+    ProjectsController,
+    NotesController,
+    DeliverablesController,
+    ContractsController,
+  ],
   providers: [ProjectsService],
 })
 export class ProjectsModule {}

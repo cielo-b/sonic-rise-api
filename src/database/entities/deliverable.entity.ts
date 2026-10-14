@@ -107,6 +107,16 @@ export class DeliverableVersion {
   @Column({ type: 'text', nullable: true })
   note: string | null;
 
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  stems: Array<{
+    id: string;
+    name: string;
+    fileKey: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: string;
+  }>;
+
   @Column({ type: 'uuid' })
   uploadedById: string;
 

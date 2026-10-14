@@ -20,6 +20,7 @@ import { ReportsModule } from './reports/reports.module';
 import { PostsModule } from './posts/posts.module';
 import { MediaModule } from './media/media.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { EventsModule } from './events/events.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { UploadsModule } from './uploads/uploads.module';
     }),
     TypeOrmModule.forFeature([Studio]),
 
+    EventsModule,
     AuthModule,
     UsersModule,
     StudiosModule,

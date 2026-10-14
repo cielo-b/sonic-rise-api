@@ -7,8 +7,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { unlink } from 'fs/promises';
+import { randomUUID } from 'crypto';
 import {
   Booking,
+  Contract,
   Deliverable,
   DeliverableComment,
   DeliverableVersion,
@@ -17,15 +19,23 @@ import {
   Studio,
   User,
 } from '../database/entities';
-import { DeliverableStatus, Role, STAFF_ROLES } from '../database/enums';
+import {
+  ContractStatus,
+  DeliverableStatus,
+  Role,
+  STAFF_ROLES,
+} from '../database/enums';
 import { hasPermission, Permission } from '../common/permissions';
 import { StorageService } from '../storage/storage.service';
 import { MailService } from '../mail/mail.service';
+import { EventsService } from '../events/events.service';
 import {
   CommentDto,
+  CreateContractDto,
   CreateDeliverableDto,
   CreateNoteDto,
   CreateProjectDto,
+  SignContractDto,
   UpdateDeliverableDto,
   UpdateProjectDto,
 } from './dto';
@@ -52,8 +62,11 @@ export class ProjectsService {
     @InjectRepository(Booking) private readonly bookings: Repository<Booking>,
     @InjectRepository(User) private readonly users: Repository<User>,
     @InjectRepository(Studio) private readonly studios: Repository<Studio>,
+    @InjectRepository(Contract)
+    private readonly contracts: Repository<Contract>,
     private readonly storage: StorageService,
     private readonly mail: MailService,
+    private readonly events: EventsService,
   ) {}
 
   private isStaff(u: User) {
@@ -421,7 +434,7 @@ export class ProjectsService {
     }
   }
 
-  /** Inline link for listening/watching while reviewing. */
+  /** Inline link for listening/watching while reviewing. Includes signed links for stems if present. */
   async streamUrl(
     studioId: string,
     id: string,
@@ -433,11 +446,18 @@ export class ProjectsService {
       where: { id: versionId, deliverableId: id },
     });
     if (!v) throw new NotFoundException('Version not found');
-    return {
-      url: await this.storage.privateUrl(v.fileKey, v.fileName, {
-        download: false,
-      }),
-    };
+    const url = await this.storage.privateUrl(v.fileKey, v.fileName, {
+      download: false,
+    });
+    const stems = await Promise.all(
+      (v.stems ?? []).map(async (s) => ({
+        ...s,
+        url: await this.storage.privateUrl(s.fileKey, s.fileName, {
+          download: false,
+        }),
+      })),
+    );
+    return { url, stems };
   }
 
   /** Download of the latest version: approved, and paid when it has a price. Staff can always download. */
@@ -536,6 +556,178 @@ export class ProjectsService {
       status: DeliverableStatus.CHANGES_REQUESTED,
       approvedAt: null,
     });
+    this.events.emit(studioId, 'deliverable.changes_requested', {
+      deliverableId: id,
+    });
     return this.getDeliverable(studioId, id, client);
+  }
+
+  // ─── Stems ─────────────────────────────────────────────────────────────────
+  async uploadStem(
+    studioId: string,
+    id: string,
+    versionId: string,
+    staff: User,
+    file: Express.Multer.File,
+    name: string,
+  ) {
+    try {
+      this.need(staff, Permission.DELIVERABLES_UPLOAD);
+      if (!file) throw new BadRequestException('No file attached');
+      const { d } = await this.deliverableAccess(studioId, id, staff);
+      const v = await this.versions.findOne({
+        where: { id: versionId, deliverableId: id },
+      });
+      if (!v) throw new NotFoundException('Version not found');
+      const key = await this.storage.uploadPrivateFile(
+        file.path,
+        file.originalname,
+        file.mimetype,
+        `${studioId}/deliverables/${d.id}/stems`,
+      );
+      const stem = {
+        id: randomUUID(),
+        name: name.trim() || file.originalname,
+        fileKey: key,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+        sizeBytes: String(file.size),
+      };
+      v.stems = [...(v.stems ?? []), stem];
+      await this.versions.save(v);
+      this.events.emit(studioId, 'deliverable.stem_uploaded', {
+        deliverableId: id,
+        versionId,
+      });
+      return this.getDeliverable(studioId, id, staff);
+    } finally {
+      if (file?.path) await unlink(file.path).catch(() => undefined);
+    }
+  }
+
+  async deleteStem(
+    studioId: string,
+    id: string,
+    versionId: string,
+    stemId: string,
+    staff: User,
+  ) {
+    this.need(staff, Permission.DELIVERABLES_UPLOAD);
+    await this.deliverableAccess(studioId, id, staff);
+    const v = await this.versions.findOne({
+      where: { id: versionId, deliverableId: id },
+    });
+    if (!v) throw new NotFoundException('Version not found');
+    const stem = (v.stems ?? []).find((s) => s.id === stemId);
+    if (stem) {
+      await this.storage.removePrivate(stem.fileKey);
+      v.stems = (v.stems ?? []).filter((s) => s.id !== stemId);
+      await this.versions.save(v);
+      this.events.emit(studioId, 'deliverable.stem_deleted', {
+        deliverableId: id,
+        versionId,
+      });
+    }
+    return this.getDeliverable(studioId, id, staff);
+  }
+
+  // ─── Contracts & Split Sheets ──────────────────────────────────────────────
+  async listContracts(studioId: string, projectId: string, viewer: User) {
+    await this.access(studioId, projectId, viewer);
+    return this.contracts.find({
+      where: { studioId, projectId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getContract(studioId: string, id: string, viewer: User) {
+    const c = await this.contracts.findOne({ where: { id, studioId } });
+    if (!c) throw new NotFoundException('Contract not found');
+    await this.access(studioId, c.projectId, viewer);
+    return c;
+  }
+
+  async createContract(
+    studioId: string,
+    projectId: string,
+    staff: User,
+    dto: CreateContractDto,
+  ) {
+    this.need(staff, Permission.PROJECTS_WRITE);
+    await this.access(studioId, projectId, staff);
+    const splits = (dto.splits ?? []).map((s) => ({
+      ...s,
+      id: randomUUID(),
+    }));
+    const contract = await this.contracts.save(
+      this.contracts.create({
+        studioId,
+        projectId,
+        title: dto.title.trim(),
+        trackTitle: dto.trackTitle.trim(),
+        type: dto.type?.trim() || 'SPLIT_SHEET',
+        splits,
+        terms: dto.terms?.trim() || null,
+        status: ContractStatus.PENDING_SIGNATURES,
+      }),
+    );
+    this.events.emit(studioId, 'contract.created', {
+      id: contract.id,
+      projectId,
+    });
+    return contract;
+  }
+
+  async signContract(
+    studioId: string,
+    id: string,
+    user: User,
+    dto: SignContractDto,
+  ) {
+    const c = await this.contracts.findOne({ where: { id, studioId } });
+    if (!c) throw new NotFoundException('Contract not found');
+    await this.access(studioId, c.projectId, user);
+
+    const now = new Date();
+    if (this.isStaff(user)) {
+      c.staffSignature = dto.signatureData;
+      c.staffSignedAt = now;
+    } else {
+      c.clientSignature = dto.signatureData;
+      c.clientSignedAt = now;
+    }
+
+    if (dto.contributorEmail) {
+      c.splits = (c.splits ?? []).map((s) =>
+        s.email.toLowerCase() === dto.contributorEmail?.toLowerCase()
+          ? {
+              ...s,
+              signedAt: now.toISOString(),
+              signatureData: dto.signatureData,
+            }
+          : s,
+      );
+    }
+
+    const allSplitsSigned =
+      (c.splits ?? []).length > 0 &&
+      (c.splits ?? []).every((s) => !!s.signedAt);
+    if ((allSplitsSigned || c.clientSignedAt) && c.staffSignedAt) {
+      c.status = ContractStatus.SIGNED;
+    }
+
+    await this.contracts.save(c);
+    this.events.emit(studioId, 'contract.signed', {
+      id: c.id,
+      projectId: c.projectId,
+    });
+    return c;
+  }
+
+  async deleteContract(studioId: string, id: string, staff: User) {
+    this.need(staff, Permission.PROJECTS_WRITE);
+    const c = await this.contracts.findOne({ where: { id, studioId } });
+    if (!c) throw new NotFoundException('Contract not found');
+    await this.contracts.remove(c);
   }
 }

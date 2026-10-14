@@ -1,6 +1,7 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsDateString,
   IsEnum,
@@ -90,4 +91,31 @@ export class CommentDto {
 
 export class RequestChangesDto {
   @ApiProperty() @IsString() @MaxLength(4000) body: string;
+}
+
+export class CreateContractDto {
+  @ApiProperty() @IsString() @MaxLength(200) title: string;
+  @ApiProperty() @IsString() @MaxLength(200) trackTitle: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsString() type?: string;
+  @ApiProperty()
+  @IsArray()
+  splits: Array<{
+    name: string;
+    email: string;
+    role: string;
+    masterShare: number;
+    publishingShare: number;
+    proAffiliation?: string;
+    ipiNumber?: string;
+  }>;
+  @ApiProperty({ required: false }) @IsOptional() @IsString() terms?: string;
+}
+
+export class SignContractDto {
+  @ApiProperty() @IsString() signatureData: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsString() contributorEmail?: string;
+}
+
+export class UploadStemDto {
+  @ApiProperty() @IsString() @MaxLength(120) name: string;
 }

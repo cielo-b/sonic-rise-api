@@ -10,9 +10,11 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { BookingsService } from './bookings.service';
 import {
   AvailabilityQuery,
@@ -34,6 +36,24 @@ import type { User } from '../database/entities';
 @Controller('bookings')
 export class BookingsController {
   constructor(private readonly svc: BookingsService) {}
+
+  @Get('calendar.ics')
+  @ApiOperation({
+    summary: 'iCal / ICS calendar feed for Google / Apple Calendar',
+  })
+  async calendarIcs(
+    @StudioId() studioId: string,
+    @Res() res: Response,
+    @Query('engineerId') engineerId?: string,
+  ) {
+    const ics = await this.svc.generateIcsFeed(studioId, engineerId);
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'inline; filename="studio-calendar.ics"',
+    );
+    res.send(ics);
+  }
 
   @Get('availability')
   @ApiOperation({ summary: 'Busy times for a day (public, no client details)' })

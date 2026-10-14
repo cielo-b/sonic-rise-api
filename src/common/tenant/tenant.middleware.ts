@@ -41,6 +41,8 @@ export class TenantMiddleware implements NestMiddleware {
   }
 
   private slugFor(req: Request): string | undefined {
+    const query = typeof req.query?.studio === 'string' ? (req.query.studio as string).trim().toLowerCase() : undefined;
+    if (query) return query;
     const header = req.header('x-studio')?.trim().toLowerCase();
     if (header) return header;
     const host = (

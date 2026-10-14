@@ -36,6 +36,7 @@ import {
 import { hasPermission, Permission } from '../common/permissions';
 import { localParts, toMinutes, zonedToUtc } from '../common/time';
 import { MailService } from '../mail/mail.service';
+import { EventsService } from '../events/events.service';
 import {
   AvailabilityQuery,
   CreateBookingDto,
@@ -82,6 +83,7 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(ServicePackage)
     private readonly packages: Repository<ServicePackage>,
     private readonly mail: MailService,
+    private readonly events: EventsService,
   ) {}
 
   onModuleInit() {
@@ -418,6 +420,11 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
 
     const booking = await this.findOne(studioId, saved.id, actor);
     void this.notifyCreated(studio, booking);
+    this.events.emit(studioId, 'booking.created', {
+      id: booking.id,
+      startsAt: booking.startsAt,
+      status: booking.status,
+    });
     return booking;
   }
 
@@ -692,6 +699,10 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
         }),
       );
     }
+    this.events.emit(studioId, 'booking.updated', {
+      id,
+      status: after.status,
+    });
     return after;
   }
 
@@ -720,6 +731,7 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       .join(' ');
     await this.bookings.save(b);
     void this.notifyStatus(studio, b);
+    this.events.emit(studioId, 'booking.cancelled', { id });
     return {
       ...(await this.findOne(studioId, id, client)),
       lateCancellation: late,
@@ -740,5 +752,79 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       );
     }
     await this.bookings.remove(b);
+  }
+
+  async generateIcsFeed(
+    studioId: string,
+    engineerId?: string,
+  ): Promise<string> {
+    const studio = await this.studio(studioId);
+    const where: FindOptionsWhere<Booking> = {
+      studioId,
+      status: In(ACTIVE_STATUSES),
+      ...(engineerId ? { engineerId } : {}),
+    };
+    const bookings = await this.bookings.find({
+      where,
+      relations: {
+        package: true,
+        room: true,
+        engineer: true,
+        client: true,
+      },
+      order: { startsAt: 'ASC' },
+      take: 200,
+    });
+
+    const formatIcsDate = (d: Date) =>
+      d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+    const lines: string[] = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//SonicRise//Studio Platform//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      `X-WR-CALNAME:${studio.name} Schedule`,
+      `X-WR-TIMEZONE:${studio.timezone || 'UTC'}`,
+    ];
+
+    for (const b of bookings) {
+      const clientName = b.client?.name ?? b.guestName ?? 'Guest Client';
+      const engineerName = b.engineer?.name ? ` | Eng: ${b.engineer.name}` : '';
+      const summary = `${b.package?.name ?? 'Studio Session'} - ${clientName} (${b.room?.name ?? 'Studio'})${engineerName}`;
+      const desc = [
+        `Booking: ${bookingReference(b.id)}`,
+        `Client: ${clientName} (${b.client?.phone ?? b.guestPhone ?? 'No phone'})`,
+        `Package: ${b.package?.name ?? 'Studio'}`,
+        `Room: ${b.room?.name ?? 'Studio'}`,
+        b.engineer ? `Engineer: ${b.engineer.name}` : null,
+        b.notes ? `Notes: ${b.notes}` : null,
+        `Status: ${b.status}`,
+      ]
+        .filter(Boolean)
+        .join('\\n');
+
+      lines.push(
+        'BEGIN:VEVENT',
+        `UID:${b.id}@sonicrise`,
+        `DTSTAMP:${formatIcsDate(new Date())}`,
+        `DTSTART:${formatIcsDate(new Date(b.startsAt))}`,
+        `DTEND:${formatIcsDate(new Date(b.endsAt))}`,
+        `SUMMARY:${summary.replace(/,/g, '\\,')}`,
+        `DESCRIPTION:${desc.replace(/,/g, '\\,')}`,
+        `LOCATION:${(b.room?.name ? `${b.room.name}, ` : '') + (studio.name || 'Studio')}`,
+        'STATUS:CONFIRMED',
+        'BEGIN:VALARM',
+        'TRIGGER:-PT30M',
+        'ACTION:DISPLAY',
+        `DESCRIPTION:Reminder: ${summary.replace(/,/g, '\\,')} in 30 minutes`,
+        'END:VALARM',
+        'END:VEVENT',
+      );
+    }
+
+    lines.push('END:VCALENDAR');
+    return lines.join('\r\n');
   }
 }

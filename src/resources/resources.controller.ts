@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ResourcesService } from './resources.service';
 import {
+  AddMaintenanceLogDto,
   CreateEquipmentDto,
   CreatePackageDto,
   CreateRoomDto,
@@ -115,6 +116,18 @@ export class EquipmentController {
     @Body() dto: UpdateEquipmentDto,
   ) {
     return this.svc.updateEquipment(studioId, id, dto);
+  }
+
+  @Post(':id/maintenance')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @Manage()
+  @ApiBearerAuth()
+  addMaintenance(
+    @StudioId() studioId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddMaintenanceLogDto,
+  ) {
+    return this.svc.addMaintenanceLog(studioId, id, dto);
   }
 
   @Delete(':id')

@@ -99,3 +99,16 @@ export enum DeliverableStatus {
   CHANGES_REQUESTED = 'CHANGES_REQUESTED',
   APPROVED = 'APPROVED',
 }
+
+export enum EquipmentStatus {
+  OPERATIONAL = 'OPERATIONAL',
+  NEEDS_MAINTENANCE = 'NEEDS_MAINTENANCE',
+  IN_REPAIR = 'IN_REPAIR',
+  RETIRED = 'RETIRED',
+}
+
+export enum ContractStatus {
+  DRAFT = 'DRAFT',
+  PENDING_SIGNATURES = 'PENDING_SIGNATURES',
+  SIGNED = 'SIGNED',
+}

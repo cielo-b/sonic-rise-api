@@ -15,7 +15,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { PricingType } from '../database/enums';
+import { PricingType, EquipmentStatus } from '../database/enums';
 
 const URL_OPTS = {
   require_tld: false,
@@ -71,10 +71,47 @@ export class CreateEquipmentDto {
   pricePerBooking?: number;
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  serialNumber?: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  barcode?: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  purchaseDate?: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  purchasePrice?: number;
+  @ApiProperty({ required: false, enum: EquipmentStatus })
+  @IsOptional()
+  @IsEnum(EquipmentStatus)
+  status?: EquipmentStatus;
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  maintenanceNotes?: string;
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 }
 export class UpdateEquipmentDto extends PartialType(CreateEquipmentDto) {}
+
+export class AddMaintenanceLogDto {
+  @ApiProperty() @IsString() @MaxLength(120) technician: string;
+  @ApiProperty() @IsString() @MaxLength(2000) description: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsNumber() @Min(0) cost?: number;
+  @ApiProperty({ required: false, enum: EquipmentStatus })
+  @IsOptional()
+  @IsEnum(EquipmentStatus)
+  status?: EquipmentStatus;
+}
 
 export class CreatePackageDto {
   @ApiProperty() @IsString() @MaxLength(120) name: string;

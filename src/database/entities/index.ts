@@ -30,6 +30,8 @@ export { Media } from './media.entity';
 export { LoginLog } from './login-log.entity';
 export { UserSession } from './user-session.entity';
 export { Post } from '../../posts/post.entity';
+export { Contract } from './contract.entity';
+export type { SplitContributor } from './contract.entity';
 
 import { Studio } from './studio.entity';
 import { User } from './user.entity';
@@ -53,6 +55,7 @@ import { Media } from './media.entity';
 import { LoginLog } from './login-log.entity';
 import { UserSession } from './user-session.entity';
 import { Post } from '../../posts/post.entity';
+import { Contract } from './contract.entity';
 
 /** Every entity, for TypeORM registration (app module, CLI data source). */
 export const ALL_ENTITIES = [
@@ -77,4 +80,5 @@ export const ALL_ENTITIES = [
   LoginLog,
   UserSession,
   Post,
+  Contract,
 ];

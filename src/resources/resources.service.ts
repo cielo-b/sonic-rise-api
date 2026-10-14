@@ -13,7 +13,9 @@ import {
   User,
 } from '../database/entities';
 import { STAFF_ROLES } from '../database/enums';
+import { randomUUID } from 'crypto';
 import {
+  AddMaintenanceLogDto,
   CreateEquipmentDto,
   CreatePackageDto,
   CreateRoomDto,
@@ -84,12 +86,36 @@ export class ResourcesService {
   }
 
   createEquipment(studioId: string, dto: CreateEquipmentDto) {
-    return this.equipment.save(this.equipment.create({ ...dto, studioId }));
+    const barcode =
+      dto.barcode?.trim() ||
+      `EQ-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    return this.equipment.save(
+      this.equipment.create({ ...dto, barcode, studioId }),
+    );
   }
 
   async updateEquipment(studioId: string, id: string, dto: UpdateEquipmentDto) {
     const item = await this.getEquipment(studioId, id);
     return this.equipment.save(Object.assign(item, dto));
+  }
+
+  async addMaintenanceLog(
+    studioId: string,
+    id: string,
+    dto: AddMaintenanceLogDto,
+  ) {
+    const item = await this.getEquipment(studioId, id);
+    const entry = {
+      id: randomUUID(),
+      date: new Date().toISOString().slice(0, 10),
+      technician: dto.technician.trim(),
+      description: dto.description.trim(),
+      cost: dto.cost,
+    };
+    item.maintenanceHistory = [entry, ...(item.maintenanceHistory ?? [])];
+    item.lastMaintainedAt = new Date();
+    if (dto.status) item.status = dto.status;
+    return this.equipment.save(item);
   }
 
   async removeEquipment(studioId: string, id: string) {

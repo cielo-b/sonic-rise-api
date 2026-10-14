@@ -23,12 +23,15 @@ import { tmpdir } from 'os';
 import { ProjectsService } from './projects.service';
 import {
   CommentDto,
+  CreateContractDto,
   CreateDeliverableDto,
   CreateNoteDto,
   CreateProjectDto,
   RequestChangesDto,
+  SignContractDto,
   UpdateDeliverableDto,
   UpdateProjectDto,
+  UploadStemDto,
   UploadVersionDto,
 } from './dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -260,5 +263,95 @@ export class DeliverablesController {
     @Body() dto: RequestChangesDto,
   ) {
     return this.svc.requestChanges(s, id, u, dto.body);
+  }
+
+  @Post(':id/versions/:versionId/stems')
+  @StaffOnly()
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({ destination: tmpdir() }),
+      limits: { fileSize: MAX_DELIVERABLE },
+    }),
+  )
+  uploadStem(
+    @StudioId() s: string,
+    @CurrentUser() u: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('versionId', ParseUUIDPipe) versionId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadStemDto,
+  ) {
+    return this.svc.uploadStem(s, id, versionId, u, file, dto.name);
+  }
+
+  @Delete(':id/versions/:versionId/stems/:stemId')
+  @StaffOnly()
+  deleteStem(
+    @StudioId() s: string,
+    @CurrentUser() u: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('versionId', ParseUUIDPipe) versionId: string,
+    @Param('stemId', ParseUUIDPipe) stemId: string,
+  ) {
+    return this.svc.deleteStem(s, id, versionId, stemId, u);
+  }
+}
+
+@ApiTags('Contracts & Split Sheets')
+@Controller('contracts')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@ApiBearerAuth()
+export class ContractsController {
+  constructor(private readonly svc: ProjectsService) {}
+
+  @Get('project/:projectId')
+  list(
+    @StudioId() s: string,
+    @CurrentUser() u: User,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+  ) {
+    return this.svc.listContracts(s, projectId, u);
+  }
+
+  @Get(':id')
+  get(
+    @StudioId() s: string,
+    @CurrentUser() u: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.getContract(s, id, u);
+  }
+
+  @Post('project/:projectId')
+  @StaffOnly()
+  create(
+    @StudioId() s: string,
+    @CurrentUser() u: User,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Body() dto: CreateContractDto,
+  ) {
+    return this.svc.createContract(s, projectId, u, dto);
+  }
+
+  @Post(':id/sign')
+  @HttpCode(HttpStatus.OK)
+  sign(
+    @StudioId() s: string,
+    @CurrentUser() u: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SignContractDto,
+  ) {
+    return this.svc.signContract(s, id, u, dto);
+  }
+
+  @Delete(':id')
+  @StaffOnly()
+  remove(
+    @StudioId() s: string,
+    @CurrentUser() u: User,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.deleteContract(s, id, u);
   }
 }
